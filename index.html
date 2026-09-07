@@ -80,7 +80,6 @@
             partialPaymentFiado: null
         };
 
-        // Asegurar compatibilidad si la config anterior no tiene logoStyle
         if (!state.config.logoStyle) state.config.logoStyle = 'circle';
 
         function saveState() {
@@ -92,7 +91,6 @@
             render();
         }
 
-        // Aplicar modo oscuro
         function updateTheme() {
             if (state.config.darkMode) {
                 document.documentElement.classList.add('dark');
@@ -101,7 +99,6 @@
             }
         }
 
-        // Generador de horarios disponibles
         function getAvailableSlots() {
             const { startHour, endHour, slotDuration, breakStart, breakEnd } = state.config;
             if (!startHour || !endHour) return [];
@@ -154,19 +151,18 @@
             }).reduce((acc, curr) => acc + curr.amount, 0);
         }
 
-        // Renderizado del Logo sin bordes ni recuadros molestos
+        // Renderizado del Logo con mayor tamaño y limpio
         function renderLogoHTML(customClass = "") {
             const style = state.config.logoStyle || 'circle';
-            let containerClass = "w-10 h-10 rounded-full overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
+            let containerClass = "w-12 h-12 rounded-full overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
             let imgClass = "w-full h-full object-cover";
 
             if (style === 'square') {
-                containerClass = "w-10 h-10 rounded-xl overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
+                containerClass = "w-12 h-12 rounded-xl overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
                 imgClass = "w-full h-full object-cover";
             } else if (style === 'rectangle') {
-                // Sin bordes, sin fondos y sin recuadros: totalmente limpio y adaptado
-                containerClass = "h-10 flex items-center justify-center bg-transparent border-0 shadow-none " + customClass;
-                imgClass = "h-9 max-w-[140px] object-contain";
+                containerClass = "h-12 flex items-center justify-center bg-transparent border-0 shadow-none " + customClass;
+                imgClass = "h-11 max-w-[170px] object-contain";
             }
 
             return `
@@ -182,16 +178,16 @@
             const appEl = document.getElementById('app');
             
             appEl.innerHTML = `
-                <!-- Header -->
-                <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
-                    <div class="flex items-center space-x-3">
+                <!-- Header sin marco en el botón de tema -->
+                <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3.5 flex items-center justify-between sticky top-0 z-30">
+                    <div class="flex items-center space-x-3.5">
                         ${renderLogoHTML()}
                         <div>
-                            <h1 class="font-bold text-base leading-tight">${state.config.name}</h1>
-                            <p class="text-xs text-barber-600 dark:text-barber-400 font-medium">${state.config.subtitle || 'Barber shop'}</p>
+                            <h1 class="font-black text-lg leading-tight tracking-wide">${state.config.name}</h1>
+                            <p class="text-xs text-barber-600 dark:text-barber-400 font-semibold tracking-wider uppercase">${state.config.subtitle || 'Barber shop'}</p>
                         </div>
                     </div>
-                    <button onclick="toggleDarkMode()" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                    <button onclick="toggleDarkMode()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition">
                         ${state.config.darkMode ? '<i data-lucide="sun" class="w-5 h-5 text-amber-400"></i>' : '<i data-lucide="moon" class="w-5 h-5"></i>'}
                     </button>
                 </header>
@@ -240,7 +236,6 @@
             lucide.createIcons();
         }
 
-        // Render Pestaña Agenda
         function renderAgenda() {
             let dayApps = state.appointments
                 .filter(a => a.date === state.selectedDate && a.status !== 'cancelled')
@@ -304,7 +299,6 @@
             `;
         }
 
-        // Render Pestaña Fiados
         function renderFiados() {
             let totalDebt = state.fiados.reduce((acc, curr) => acc + curr.totalAmount, 0);
             return `
@@ -346,7 +340,6 @@
                                     </div>
                                 </div>
 
-                                <!-- Historial detallado de servicios y pagos parciales -->
                                 <div class="border-t border-gray-100 dark:border-gray-800 pt-3 space-y-2">
                                     <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Detalle de Cuenta:</p>
                                     <div class="space-y-1.5">
@@ -376,7 +369,6 @@
             `;
         }
 
-        // Render Pestaña Caja
         function renderCaja() {
             return `
                 <div class="space-y-4">
@@ -412,7 +404,6 @@
             `;
         }
 
-        // Render Pestaña Ajustes
         function renderAjustes() {
             const currentStyle = state.config.logoStyle || 'circle';
             return `
@@ -477,7 +468,6 @@
                         </div>
                     </div>
 
-                    <!-- Apartado de Historial / Datos -->
                     <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
                         <h2 class="font-bold text-sm uppercase text-red-600">Gestión de Historial</h2>
                         <p class="text-xs text-gray-500">Puedes vaciar el historial de transacciones y registros de caja si deseas reiniciar las estadísticas.</p>
@@ -490,7 +480,6 @@
             `;
         }
 
-        // Modal Nuevo Turno
         function renderNewAppointmentModal() {
             let slots = getAvailableSlots();
             return `
@@ -523,7 +512,6 @@
             `;
         }
 
-        // Modal Cobro
         function renderPaymentModal() {
             let app = state.paymentModalApp;
             return `
@@ -542,7 +530,6 @@
             `;
         }
 
-        // Modal Pago Parcial
         function renderPartialModal() {
             return `
                 <div class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -557,7 +544,6 @@
             `;
         }
 
-        // Acciones y Handlers
         function setTab(tab) { state.activeTab = tab; state.activeMenuId = null; state.activeFiadoMenuId = null; render(); }
         function toggleDarkMode() { state.config.darkMode = !state.config.darkMode; saveState(); }
         function changeDate(d) { state.selectedDate = d; render(); }
@@ -695,7 +681,6 @@
             state.config.breakEnd = document.getElementById('cfgBreakEnd').value;
             state.config.logoStyle = document.getElementById('cfgLogoStyle').value;
 
-            // Procesar la imagen seleccionada de la galería si existe
             let logoFile = document.getElementById('cfgLogoFile').files[0];
             if (logoFile) {
                 let reader = new FileReader();
@@ -733,7 +718,6 @@
             saveState();
         }
 
-        // Inicializar
         render();
     </script>
 </body>
