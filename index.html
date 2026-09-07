@@ -151,7 +151,6 @@
             }).reduce((acc, curr) => acc + curr.amount, 0);
         }
 
-        // Renderizado del Logo con mayor tamaño y limpio
         function renderLogoHTML(customClass = "") {
             const style = state.config.logoStyle || 'circle';
             let containerClass = "w-12 h-12 rounded-full overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
@@ -172,13 +171,11 @@
             `;
         }
 
-        // Render Principal
         function render() {
             updateTheme();
             const appEl = document.getElementById('app');
             
             appEl.innerHTML = `
-                <!-- Header sin marco en el botón de tema -->
                 <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3.5 flex items-center justify-between sticky top-0 z-30">
                     <div class="flex items-center space-x-3.5">
                         ${renderLogoHTML()}
@@ -192,7 +189,6 @@
                     </button>
                 </header>
 
-                <!-- Contenido -->
                 <main class="flex-1 overflow-y-auto pb-24 px-4 pt-4 no-scrollbar">
                     ${state.activeTab === 'agenda' ? renderAgenda() : ''}
                     ${state.activeTab === 'fiados' ? renderFiados() : ''}
@@ -200,14 +196,12 @@
                     ${state.activeTab === 'ajustes' ? renderAjustes() : ''}
                 </main>
 
-                <!-- Botón flotante -->
                 ${state.activeTab === 'agenda' ? `
                     <button onclick="openModal()" class="absolute bottom-20 right-4 w-14 h-14 bg-barber-600 hover:bg-barber-700 text-white rounded-full shadow-2xl flex items-center justify-center transition transform hover:scale-105 z-20">
                         <i data-lucide="plus" class="w-7 h-7"></i>
                     </button>
                 ` : ''}
 
-                <!-- Navegación Inferior -->
                 <nav class="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-2 px-6 flex justify-between items-center z-30">
                     <button onclick="setTab('agenda')" class="flex flex-col items-center space-y-1 ${state.activeTab === 'agenda' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
                         <i data-lucide="calendar" class="w-5 h-5"></i>
@@ -228,7 +222,6 @@
                     </button>
                 </nav>
 
-                <!-- Modales -->
                 ${state.isModalOpen ? renderNewAppointmentModal() : ''}
                 ${state.paymentModalApp ? renderPaymentModal() : ''}
                 ${state.partialPaymentFiado ? renderPartialModal() : ''}
@@ -620,9 +613,10 @@
             saveState();
         }
 
+        // NUEVO FORMATO DE MENSAJE DE WHATSAPP ADAPTADO AL NOMBRE DE LA PELUQUERÍA
         function sendWhatsApp(name, phone, service, time, date, price) {
             let cleanPhone = phone.replace(/\D/g, '');
-            let msg = `¡Hola ${name}! 👋 Turno en *${state.config.name}* 💈.\n📅 Fecha: ${date}\n⏰ Hora: ${time}\n✂️ Servicio: ${service}\n💰 Total: $${price.toLocaleString()}`;
+            let msg = `¡Hola *${name}*! Confirmamos los datos de tu turno en *${state.config.name}* 💈:\n📅 *Fecha:* ${date}\n⏰ *Hora:* ${time}\n\n*Servicios:*\n• ${service.toUpperCase()}: $${price.toLocaleString()}\n*Total a abonar: $${price.toLocaleString()}*\n\n📍 ¡Te esperamos en la barbería!`;
             window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
