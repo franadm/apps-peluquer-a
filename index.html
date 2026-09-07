@@ -44,12 +44,13 @@
         // Estado Global de la App
         const DEFAULT_CONFIG = {
             name: 'ALEXSTYLE',
-            subtitle: 'Barbershop & Studio',
+            subtitle: 'Barber shop',
             logo: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&auto=format&fit=crop&q=80',
+            logoStyle: 'circle', // 'circle', 'square', 'rectangle'
             phone: '+5493858400000',
             instagram: '@alexstyle.barber',
             startHour: '09:00',
-            endHour: '20:00',
+            endHour: '23:00',
             slotDuration: 30,
             breakStart: '13:00',
             breakEnd: '14:00',
@@ -58,9 +59,8 @@
 
         const DEFAULT_SERVICES = [
             { id: '1', name: 'Corte de Pelo', price: 15000 },
-            { id: '2', name: 'Barba', price: 8000 },
-            { id: '3', name: 'Corte + Barba', price: 20000 },
-            { id: '4', name: 'Claritos / Color', price: 25000 },
+            { id: '2', name: 'Global + Corte', price: 60000 },
+            { id: '3', name: 'Clarito + Corte', price: 55000 },
         ];
 
         let state = {
@@ -79,6 +79,9 @@
             paymentModalApp: null,
             partialPaymentFiado: null
         };
+
+        // Asegurar compatibilidad si la config anterior no tiene logoStyle
+        if (!state.config.logoStyle) state.config.logoStyle = 'circle';
 
         function saveState() {
             localStorage.setItem('alexstyle_config', JSON.stringify(state.config));
@@ -151,6 +154,28 @@
             }).reduce((acc, curr) => acc + curr.amount, 0);
         }
 
+        // Renderizado del Logo sin bordes ni recuadros molestos
+        function renderLogoHTML(customClass = "") {
+            const style = state.config.logoStyle || 'circle';
+            let containerClass = "w-10 h-10 rounded-full overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
+            let imgClass = "w-full h-full object-cover";
+
+            if (style === 'square') {
+                containerClass = "w-10 h-10 rounded-xl overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
+                imgClass = "w-full h-full object-cover";
+            } else if (style === 'rectangle') {
+                // Sin bordes, sin fondos y sin recuadros: totalmente limpio y adaptado
+                containerClass = "h-10 flex items-center justify-center bg-transparent border-0 shadow-none " + customClass;
+                imgClass = "h-9 max-w-[140px] object-contain";
+            }
+
+            return `
+                <div class="${containerClass}">
+                    <img src="${state.config.logo}" alt="Logo" class="${imgClass}" onerror="this.src='https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&auto=format&fit=crop&q=80'">
+                </div>
+            `;
+        }
+
         // Render Principal
         function render() {
             updateTheme();
@@ -160,12 +185,10 @@
                 <!-- Header -->
                 <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
                     <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-full overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md">
-                            <img src="${state.config.logo}" alt="Logo" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&auto=format&fit=crop&q=80'">
-                        </div>
+                        ${renderLogoHTML()}
                         <div>
                             <h1 class="font-bold text-base leading-tight">${state.config.name}</h1>
-                            <p class="text-xs text-barber-600 dark:text-barber-400 font-medium">${state.config.subtitle || 'Barbershop & Studio'}</p>
+                            <p class="text-xs text-barber-600 dark:text-barber-400 font-medium">${state.config.subtitle || 'Barber shop'}</p>
                         </div>
                     </div>
                     <button onclick="toggleDarkMode()" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
@@ -389,19 +412,38 @@
             `;
         }
 
-        // Render Pestaña Ajustes (Incluye edición del encabezado y botón para borrar historial de caja)
+        // Render Pestaña Ajustes
         function renderAjustes() {
+            const currentStyle = state.config.logoStyle || 'circle';
             return `
                 <div class="space-y-6">
                     <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
                         <h2 class="font-bold text-sm uppercase text-barber-600">Negocio y Horarios</h2>
+                        
+                        <div>
+                            <label class="text-xs text-gray-500">Logo de la App (Desde tu Galería)</label>
+                            <div class="flex items-center space-x-3 mt-2">
+                                ${renderLogoHTML()}
+                                <input type="file" id="cfgLogoFile" accept="image/*" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-barber-50 file:text-barber-700 hover:file:bg-barber-100 dark:file:bg-gray-800 dark:file:text-barber-400 cursor-pointer">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-xs text-gray-500">Formato / Forma del Logo</label>
+                            <select id="cfgLogoStyle" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                                <option value="circle" ${currentStyle === 'circle' ? 'selected' : ''}>Circular</option>
+                                <option value="square" ${currentStyle === 'square' ? 'selected' : ''}>Cuadrado</option>
+                                <option value="rectangle" ${currentStyle === 'rectangle' ? 'selected' : ''}>Rectangular / Horizontal (Sin recuadro ni bordes)</option>
+                            </select>
+                        </div>
+
                         <div>
                             <label class="text-xs text-gray-500">Nombre Principal</label>
                             <input type="text" id="cfgName" value="${state.config.name}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
                         </div>
                         <div>
                             <label class="text-xs text-gray-500">Subtítulo / Eslogan (Encabezado)</label>
-                            <input type="text" id="cfgSubtitle" value="${state.config.subtitle || 'Barbershop & Studio'}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                            <input type="text" id="cfgSubtitle" value="${state.config.subtitle || 'Barber shop'}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <div><label class="text-xs text-gray-500">Apertura</label><input type="time" id="cfgStart" value="${state.config.startHour}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
@@ -651,8 +693,22 @@
             state.config.slotDuration = Number(document.getElementById('cfgDuration').value);
             state.config.breakStart = document.getElementById('cfgBreakStart').value;
             state.config.breakEnd = document.getElementById('cfgBreakEnd').value;
-            saveState();
-            alert('¡Ajustes guardados correctamente!');
+            state.config.logoStyle = document.getElementById('cfgLogoStyle').value;
+
+            // Procesar la imagen seleccionada de la galería si existe
+            let logoFile = document.getElementById('cfgLogoFile').files[0];
+            if (logoFile) {
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    state.config.logo = e.target.result;
+                    saveState();
+                    alert('¡Ajustes y logo guardados correctamente!');
+                };
+                reader.readAsDataURL(logoFile);
+            } else {
+                saveState();
+                alert('¡Ajustes guardados correctamente!');
+            }
         }
 
         function clearCashHistory() {
