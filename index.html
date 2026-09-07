@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ALEXSTYLE - Barbershop Manager</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        barber: {
+                            50: '#fdf8f6',
+                            100: '#f2e8e5',
+                            500: '#d97706',
+                            600: '#b45309',
+                            700: '#92400e',
+                            800: '#78350f',
+                            900: '#451a03',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="h-full bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex justify-center">
+
+    <div id="app" class="h-full w-full max-w-md flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative overflow-hidden">
+        <!-- Contenido dinámico inyectado por JS -->
+    </div>
+
+    <script>
+        // Estado Global de la App
+        const DEFAULT_CONFIG = {
+            name: 'ALEXSTYLE',
+            subtitle: 'Barbershop & Studio',
+            logo: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&auto=format&fit=crop&q=80',
+            phone: '+5493858400000',
+            instagram: '@alexstyle.barber',
+            startHour: '09:00',
+            endHour: '20:00',
+            slotDuration: 30,
+            breakStart: '13:00',
+            breakEnd: '14:00',
+            darkMode: false
+        };
+
+        const DEFAULT_SERVICES = [
+            { id: '1', name: 'Corte de Pelo', price: 15000 },
+            { id: '2', name: 'Barba', price: 8000 },
+            { id: '3', name: 'Corte + Barba', price: 20000 },
+            { id: '4', name: 'Claritos / Color', price: 25000 },
+        ];
+
+        let state = {
+            config: JSON.parse(localStorage.getItem('alexstyle_config')) || DEFAULT_CONFIG,
+            services: JSON.parse(localStorage.getItem('alexstyle_services')) || DEFAULT_SERVICES,
+            appointments: JSON.parse(localStorage.getItem('alexstyle_appointments')) || [
+                { id: '1', clientName: 'Juan Pérez', phone: '3858123456', date: new Date().toISOString().split('T')[0], time: '10:00', serviceName: 'Corte de Pelo', price: 15000, status: 'pending', paymentMethod: null }
+            ],
+            fiados: JSON.parse(localStorage.getItem('alexstyle_fiados')) || [],
+            cashLogs: JSON.parse(localStorage.getItem('alexstyle_cash')) || [],
+            activeTab: 'agenda',
+            selectedDate: new Date().toISOString().split('T')[0],
+            isModalOpen: false,
+            activeMenuId: null,
+            activeFiadoMenuId: null,
+            paymentModalApp: null,
+            partialPaymentFiado: null
+        };
+
+        function saveState() {
+            localStorage.setItem('alexstyle_config', JSON.stringify(state.config));
+            localStorage.setItem('alexstyle_services', JSON.stringify(state.services));
+            localStorage.setItem('alexstyle_appointments', JSON.stringify(state.appointments));
+            localStorage.setItem('alexstyle_fiados', JSON.stringify(state.fiados));
+            localStorage.setItem('alexstyle_cash', JSON.stringify(state.cashLogs));
+            render();
+        }
+
+        // Aplicar modo oscuro
+        function updateTheme() {
+            if (state.config.darkMode) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        // Generador de horarios disponibles
+        function getAvailableSlots() {
+            const { startHour, endHour, slotDuration, breakStart, breakEnd } = state.config;
+            if (!startHour || !endHour) return [];
+            let slots = [];
+            let [sH, sM] = startHour.split(':').map(Number);
+            let [eH, eM] = endHour.split(':').map(Number);
+            
+            let current = sH * 60 + sM;
+            let end = eH * 60 + eM;
+            let duration = Number(slotDuration) || 30;
+
+            let bStart = -1, bEnd = -1;
+            if (breakStart && breakEnd) {
+                let [bSH, bSM] = breakStart.split(':').map(Number);
+                let [bEH, bEM] = breakEnd.split(':').map(Number);
+                bStart = bSH * 60 + bSM;
+                bEnd = bEH * 60 + bEM;
+            }
+
+            let booked = state.appointments
+                .filter(a => a.date === state.selectedDate && a.status !== 'cancelled')
+                .map(a => a.time);
+
+            while (current + duration <= end) {
+                let h = Math.floor(current / 60).toString().padStart(2, '0');
+                let m = (current % 60).toString().padStart(2, '0');
+                let timeStr = `${h}:${m}`;
+                let inBreak = bStart !== -1 && current >= bStart && current < bEnd;
+
+                if (!inBreak && !booked.includes(timeStr)) {
+                    slots.push(timeStr);
+                }
+                current += duration;
+            }
+            return slots;
+        }
+
+        function calculateRevenue(period) {
+            let now = new Date();
+            return state.cashLogs.filter(log => {
+                let logDate = new Date(log.date);
+                if (period === 'day') return logDate.toDateString() === now.toDateString();
+                if (period === 'week') {
+                    let startOfWeek = new Date(now);
+                    startOfWeek.setDate(now.getDate() - now.getDay());
+                    return logDate >= startOfWeek;
+                }
+                if (period === 'month') return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
+                return true;
+            }).reduce((acc, curr) => acc + curr.amount, 0);
+        }
+
+        // Render Principal
+        function render() {
+            updateTheme();
+            const appEl = document.getElementById('app');
+            
+            appEl.innerHTML = `
+                <!-- Header -->
+                <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md">
+                            <img src="${state.config.logo}" alt="Logo" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&auto=format&fit=crop&q=80'">
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-base leading-tight">${state.config.name}</h1>
+                            <p class="text-xs text-barber-600 dark:text-barber-400 font-medium">${state.config.subtitle || 'Barbershop & Studio'}</p>
+                        </div>
+                    </div>
+                    <button onclick="toggleDarkMode()" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                        ${state.config.darkMode ? '<i data-lucide="sun" class="w-5 h-5 text-amber-400"></i>' : '<i data-lucide="moon" class="w-5 h-5"></i>'}
+                    </button>
+                </header>
+
+                <!-- Contenido -->
+                <main class="flex-1 overflow-y-auto pb-24 px-4 pt-4 no-scrollbar">
+                    ${state.activeTab === 'agenda' ? renderAgenda() : ''}
+                    ${state.activeTab === 'fiados' ? renderFiados() : ''}
+                    ${state.activeTab === 'caja' ? renderCaja() : ''}
+                    ${state.activeTab === 'ajustes' ? renderAjustes() : ''}
+                </main>
+
+                <!-- Botón flotante -->
+                ${state.activeTab === 'agenda' ? `
+                    <button onclick="openModal()" class="absolute bottom-20 right-4 w-14 h-14 bg-barber-600 hover:bg-barber-700 text-white rounded-full shadow-2xl flex items-center justify-center transition transform hover:scale-105 z-20">
+                        <i data-lucide="plus" class="w-7 h-7"></i>
+                    </button>
+                ` : ''}
+
+                <!-- Navegación Inferior -->
+                <nav class="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-2 px-6 flex justify-between items-center z-30">
+                    <button onclick="setTab('agenda')" class="flex flex-col items-center space-y-1 ${state.activeTab === 'agenda' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
+                        <i data-lucide="calendar" class="w-5 h-5"></i>
+                        <span class="text-[10px]">Agenda</span>
+                    </button>
+                    <button onclick="setTab('fiados')" class="flex flex-col items-center space-y-1 relative ${state.activeTab === 'fiados' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                        <span class="text-[10px]">Fiados</span>
+                        ${state.fiados.length > 0 ? `<span class="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold">${state.fiados.length}</span>` : ''}
+                    </button>
+                    <button onclick="setTab('caja')" class="flex flex-col items-center space-y-1 ${state.activeTab === 'caja' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
+                        <i data-lucide="dollar-sign" class="w-5 h-5"></i>
+                        <span class="text-[10px]">Caja</span>
+                    </button>
+                    <button onclick="setTab('ajustes')" class="flex flex-col items-center space-y-1 ${state.activeTab === 'ajustes' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
+                        <i data-lucide="settings" class="w-5 h-5"></i>
+                        <span class="text-[10px]">Ajustes</span>
+                    </button>
+                </nav>
+
+                <!-- Modales -->
+                ${state.isModalOpen ? renderNewAppointmentModal() : ''}
+                ${state.paymentModalApp ? renderPaymentModal() : ''}
+                ${state.partialPaymentFiado ? renderPartialModal() : ''}
+            `;
+            lucide.createIcons();
+        }
+
+        // Render Pestaña Agenda
+        function renderAgenda() {
+            let dayApps = state.appointments
+                .filter(a => a.date === state.selectedDate && a.status !== 'cancelled')
+                .sort((a,b) => a.time.localeCompare(b.time));
+
+            return `
+                <div class="space-y-4">
+                    <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Fecha Seleccionada</p>
+                            <input type="date" value="${state.selectedDate}" onchange="changeDate(this.value)" class="bg-transparent font-bold text-lg text-barber-600 outline-none cursor-pointer">
+                        </div>
+                        <span class="px-2.5 py-1 bg-barber-50 dark:bg-barber-900/30 text-barber-600 text-xs font-semibold rounded-full">
+                            ${dayApps.length} turnos
+                        </span>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider px-1">Turnos del Día</h2>
+                        ${dayApps.length === 0 ? `
+                            <div class="text-center py-12 bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-6">
+                                <i data-lucide="calendar" class="w-12 h-12 mx-auto text-gray-300 mb-2"></i>
+                                <p class="text-sm font-medium text-gray-500">No hay turnos agendados para esta fecha.</p>
+                            </div>
+                        ` : dayApps.map(app => `
+                            <div class="p-4 rounded-2xl bg-white dark:bg-gray-900 border shadow-sm relative ${app.status === 'completed' ? 'border-emerald-200' : 'border-gray-100 dark:border-gray-800'}">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="p-2.5 rounded-xl bg-barber-50 dark:bg-barber-900/40 text-barber-600 font-bold text-sm flex items-center">
+                                            <i data-lucide="clock" class="w-4 h-4 mr-1"></i> ${app.time}
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-base">${app.clientName}</h3>
+                                            <p class="text-xs text-gray-500">${app.serviceName}</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-bold text-barber-600 text-sm">$${app.price.toLocaleString()}</span>
+                                        <div class="relative">
+                                            <button onclick="toggleMenu('${app.id}')" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+                                                <i data-lucide="menu" class="w-5 h-5"></i>
+                                            </button>
+                                            ${state.activeMenuId === app.id ? `
+                                                <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-20">
+                                                    ${app.status === 'pending' ? `<button onclick="openPaymentModal('${app.id}')" class="w-full text-left px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="dollar-sign" class="w-4 h-4"></i> Cobrar / Finalizar</button>` : ''}
+                                                    <button onclick="sendWhatsApp('${app.clientName}', '${app.phone}', '${app.serviceName}', '${app.time}', '${app.date}', ${app.price})" class="w-full text-left px-4 py-2 text-xs font-semibold text-sky-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="share-2" class="w-4 h-4"></i> Enviar WhatsApp</button>
+                                                    <button onclick="cancelAppointment('${app.id}')" class="w-full text-left px-4 py-2 text-xs font-semibold text-red-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="x-circle" class="w-4 h-4"></i> Cancelar Turno</button>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-400">
+                                    <span>Tel: ${app.phone}</span>
+                                    <span>${app.status === 'completed' ? '✅ Cobrado (' + app.paymentMethod + ')' : '⏳ Pendiente'}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render Pestaña Fiados
+        function renderFiados() {
+            let totalDebt = state.fiados.reduce((acc, curr) => acc + curr.totalAmount, 0);
+            return `
+                <div class="space-y-4">
+                    <div class="bg-gradient-to-r from-amber-600 to-barber-700 p-4 rounded-2xl text-white shadow-lg">
+                        <p class="text-xs uppercase tracking-wider text-amber-200 font-semibold">Total Adeudado (Fiados)</p>
+                        <h2 class="text-2xl font-black mt-1">$${totalDebt.toLocaleString()}</h2>
+                        <p class="text-xs text-amber-100 mt-1">Cuentas corrientes activas</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider px-1">Clientes con Deuda</h2>
+                        ${state.fiados.length === 0 ? `
+                            <div class="text-center py-12 bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-6">
+                                <i data-lucide="shield-check" class="w-12 h-12 mx-auto text-emerald-400 mb-2"></i>
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-300">¡No hay clientes con fiados pendientes!</p>
+                            </div>
+                        ` : state.fiados.map(f => `
+                            <div class="p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm space-y-3 relative">
+                                <div class="flex items-start justify-between">
+                                    <div>
+                                        <h3 class="font-bold text-base">${f.clientName}</h3>
+                                        <p class="text-xs text-gray-500">Tel: ${f.phone}</p>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-extrabold text-red-600 text-base">$${f.totalAmount.toLocaleString()}</span>
+                                        <div class="relative">
+                                            <button onclick="toggleFiadoMenu('${f.id}')" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+                                                <i data-lucide="menu" class="w-5 h-5"></i>
+                                            </button>
+                                            ${state.activeFiadoMenuId === f.id ? `
+                                                <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-20">
+                                                    <button onclick="sendFiadoWhatsApp('${f.clientName}', '${f.phone}', ${f.totalAmount})" class="w-full text-left px-4 py-2 text-xs font-semibold text-sky-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="share-2" class="w-4 h-4"></i> Recordatorio WhatsApp</button>
+                                                    <button onclick="payFiadoTotal('${f.id}')" class="w-full text-left px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="check-circle" class="w-4 h-4"></i> Abonar Total (Caja)</button>
+                                                    <button onclick="openPartialModal('${f.id}')" class="w-full text-left px-4 py-2 text-xs font-semibold text-amber-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="wallet" class="w-4 h-4"></i> Pago Parcial</button>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Historial detallado de servicios y pagos parciales -->
+                                <div class="border-t border-gray-100 dark:border-gray-800 pt-3 space-y-2">
+                                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Detalle de Cuenta:</p>
+                                    <div class="space-y-1.5">
+                                        ${(f.history || []).map(h => {
+                                            let isPayment = h.type === 'payment';
+                                            return `
+                                                <div class="flex items-center justify-between text-xs bg-gray-50 dark:bg-gray-800/50 p-2 rounded-xl">
+                                                    <div class="flex items-center space-x-2">
+                                                        <i data-lucide="${isPayment ? 'arrow-down-left' : 'scissors'}" class="w-3.5 h-3.5 ${isPayment ? 'text-emerald-500' : 'text-amber-500'}"></i>
+                                                        <div>
+                                                            <p class="font-semibold">${isPayment ? 'Pago Parcial' : (h.service || 'Servicio')}</p>
+                                                            <p class="text-[10px] text-gray-400">📅 ${h.date} ${h.time ? '• ⏰ ' + h.time : ''}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span class="font-bold ${isPayment ? 'text-emerald-600' : 'text-red-600'}">
+                                                        ${isPayment ? '-' : '+'}$${h.amount.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render Pestaña Caja
+        function renderCaja() {
+            return `
+                <div class="space-y-4">
+                    <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
+                        <h2 class="font-bold text-base flex items-center"><i data-lucide="wallet" class="w-5 h-5 mr-2 text-barber-600"></i> Control de Caja</h2>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl text-center">
+                                <p class="text-[10px] text-gray-400 uppercase font-bold">Día</p>
+                                <p class="text-sm font-black text-barber-600 mt-1">$${calculateRevenue('day').toLocaleString()}</p>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl text-center">
+                                <p class="text-[10px] text-gray-400 uppercase font-bold">Semana</p>
+                                <p class="text-sm font-black text-barber-600 mt-1">$${calculateRevenue('week').toLocaleString()}</p>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl text-center">
+                                <p class="text-[10px] text-gray-400 uppercase font-bold">Mes</p>
+                                <p class="text-sm font-black text-barber-600 mt-1">$${calculateRevenue('month').toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-gray-400 italic">* Regla: Los servicios fiados suman a caja únicamente cuando el cliente los abona (total o parcialmente).</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider px-1">Últimos Ingresos</h2>
+                        ${state.cashLogs.length === 0 ? `<div class="text-center py-8 text-xs text-gray-400 bg-white dark:bg-gray-900 rounded-2xl">No hay transacciones aún.</div>` : state.cashLogs.slice().reverse().map(l => `
+                            <div class="p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs">
+                                <div><p class="font-bold">${l.description}</p><p class="text-[10px] text-gray-400">${new Date(l.date).toLocaleString()}</p></div>
+                                <span class="font-extrabold text-emerald-600">+$${l.amount.toLocaleString()}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render Pestaña Ajustes (Incluye edición del encabezado y botón para borrar historial de caja)
+        function renderAjustes() {
+            return `
+                <div class="space-y-6">
+                    <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
+                        <h2 class="font-bold text-sm uppercase text-barber-600">Negocio y Horarios</h2>
+                        <div>
+                            <label class="text-xs text-gray-500">Nombre Principal</label>
+                            <input type="text" id="cfgName" value="${state.config.name}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500">Subtítulo / Eslogan (Encabezado)</label>
+                            <input type="text" id="cfgSubtitle" value="${state.config.subtitle || 'Barbershop & Studio'}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="text-xs text-gray-500">Apertura</label><input type="time" id="cfgStart" value="${state.config.startHour}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
+                            <div><label class="text-xs text-gray-500">Cierre</label><input type="time" id="cfgEnd" value="${state.config.endHour}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="text-xs text-gray-500">Minutos por Cliente</label><input type="number" id="cfgDuration" value="${state.config.slotDuration}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
+                            <div>
+                                <label class="text-xs text-gray-500">Almuerzo Inicio/Fin</label>
+                                <div class="flex space-x-1 mt-1">
+                                    <input type="time" id="cfgBreakStart" value="${state.config.breakStart}" class="w-1/2 px-1 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs outline-none">
+                                    <input type="time" id="cfgBreakEnd" value="${state.config.breakEnd}" class="w-1/2 px-1 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs outline-none">
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="saveConfig()" class="w-full py-2 bg-barber-600 text-white font-bold rounded-xl text-xs">Guardar Cambios</button>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
+                        <h2 class="font-bold text-sm uppercase text-barber-600">Servicios y Precios</h2>
+                        ${state.services.map(s => `
+                            <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-2 rounded-xl text-xs">
+                                <span>${s.name} - $${s.price.toLocaleString()}</span>
+                                <button onclick="deleteService('${s.id}')" class="text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </div>
+                        `).join('')}
+                        <div class="flex space-x-2 pt-2">
+                            <input type="text" id="newSrvName" placeholder="Servicio..." class="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs outline-none">
+                            <input type="number" id="newSrvPrice" placeholder="Precio" class="w-24 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs outline-none">
+                            <button onclick="addService()" class="px-3 py-2 bg-barber-600 text-white rounded-xl text-xs font-bold"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Apartado de Historial / Datos -->
+                    <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
+                        <h2 class="font-bold text-sm uppercase text-red-600">Gestión de Historial</h2>
+                        <p class="text-xs text-gray-500">Puedes vaciar el historial de transacciones y registros de caja si deseas reiniciar las estadísticas.</p>
+                        <button onclick="clearCashHistory()" class="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            <span>Borrar Historial de Caja</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Modal Nuevo Turno
+        function renderNewAppointmentModal() {
+            let slots = getAvailableSlots();
+            return `
+                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    <div class="bg-white dark:bg-gray-900 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl space-y-4">
+                        <div class="flex justify-between border-b pb-3 dark:border-gray-800">
+                            <h3 class="font-bold text-base">Nuevo Turno</h3>
+                            <button onclick="closeModal()"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        <form onsubmit="createAppointment(event)" class="space-y-3">
+                            <div><label class="text-xs text-gray-500">Cliente</label><input type="text" id="modalClient" required placeholder="Nombre..." class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
+                            <div><label class="text-xs text-gray-500">Teléfono</label><input type="text" id="modalPhone" placeholder="Ej. 3858123456" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
+                            <div>
+                                <label class="text-xs text-gray-500">Servicio</label>
+                                <select id="modalService" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                                    ${state.services.map(s => `<option value="${s.id}">${s.name} - $${s.price.toLocaleString()}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-500">Horario (Automático)</label>
+                                <select id="modalTime" required class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                                    <option value="">Seleccionar...</option>
+                                    ${slots.map(sl => `<option value="${sl}">${sl}</option>`).join('')}
+                                </select>
+                            </div>
+                            <button type="submit" class="w-full py-3 bg-barber-600 text-white font-bold rounded-xl mt-4">Crear Turno</button>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Modal Cobro
+        function renderPaymentModal() {
+            let app = state.paymentModalApp;
+            return `
+                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+                        <h3 class="font-bold text-base text-center">Cobrar a ${app.clientName}</h3>
+                        <p class="text-xs text-center text-gray-400">${app.serviceName} ($${app.price.toLocaleString()})</p>
+                        <div class="space-y-2 pt-2">
+                            <button onclick="processPayment('efectivo')" class="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl text-xs">Efectivo (Caja)</button>
+                            <button onclick="processPayment('transferencia')" class="w-full py-3 bg-sky-600 text-white font-bold rounded-xl text-xs">Transferencia (Caja)</button>
+                            <button onclick="processPayment('fiado')" class="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs">Fiado (Cuenta Corriente)</button>
+                        </div>
+                        <button onclick="state.paymentModalApp=null;render()" class="w-full py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-xl text-xs">Cancelar</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Modal Pago Parcial
+        function renderPartialModal() {
+            return `
+                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+                        <h3 class="font-bold text-base text-center">Pago Parcial - ${state.partialPaymentFiado.clientName}</h3>
+                        <p class="text-xs text-center text-gray-400">Deuda actual: $${state.partialPaymentFiado.totalAmount.toLocaleString()}</p>
+                        <input type="number" id="partialAmtInput" placeholder="Monto abonado ($)" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                        <button onclick="confirmPartialPayment()" class="w-full py-3 bg-barber-600 text-white font-bold rounded-xl text-xs">Confirmar Abono (Suma a Caja)</button>
+                        <button onclick="state.partialPaymentFiado=null;render()" class="w-full py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-xl text-xs">Cancelar</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Acciones y Handlers
+        function setTab(tab) { state.activeTab = tab; state.activeMenuId = null; state.activeFiadoMenuId = null; render(); }
+        function toggleDarkMode() { state.config.darkMode = !state.config.darkMode; saveState(); }
+        function changeDate(d) { state.selectedDate = d; render(); }
+        function toggleMenu(id) { state.activeMenuId = state.activeMenuId === id ? null : id; render(); }
+        function toggleFiadoMenu(id) { state.activeFiadoMenuId = state.activeFiadoMenuId === id ? null : id; render(); }
+        function openModal() { state.isModalOpen = true; render(); }
+        function closeModal() { state.isModalOpen = false; render(); }
+
+        function createAppointment(e) {
+            e.preventDefault();
+            let name = document.getElementById('modalClient').value;
+            let phone = document.getElementById('modalPhone').value || state.config.phone;
+            let srvId = document.getElementById('modalService').value;
+            let time = document.getElementById('modalTime').value;
+            let srv = state.services.find(s => s.id === srvId);
+
+            state.appointments.push({
+                id: Date.now().toString(),
+                clientName: name,
+                phone: phone,
+                date: state.selectedDate,
+                time: time,
+                serviceName: srv.name,
+                price: srv.price,
+                status: 'pending',
+                paymentMethod: null
+            });
+            state.isModalOpen = false;
+            saveState();
+        }
+
+        function cancelAppointment(id) {
+            state.appointments = state.appointments.map(a => a.id === id ? { ...a, status: 'cancelled' } : a);
+            state.activeMenuId = null;
+            saveState();
+        }
+
+        function openPaymentModal(id) {
+            state.paymentModalApp = state.appointments.find(a => a.id === id);
+            state.activeMenuId = null;
+            render();
+        }
+
+        function processPayment(method) {
+            let app = state.paymentModalApp;
+            state.appointments = state.appointments.map(a => a.id === app.id ? { ...a, status: 'completed', paymentMethod: method } : a);
+            state.paymentModalApp = null;
+
+            if (method === 'fiado') {
+                let existing = state.fiados.find(f => f.clientName.toLowerCase() === app.clientName.toLowerCase());
+                let entry = { 
+                    type: 'debt', 
+                    date: app.date, 
+                    time: app.time, 
+                    service: app.serviceName, 
+                    amount: app.price 
+                };
+                if (existing) {
+                    existing.totalAmount += app.price;
+                    if (!existing.history) existing.history = [];
+                    existing.history.push(entry);
+                } else {
+                    state.fiados.push({ 
+                        id: Date.now().toString(), 
+                        clientName: app.clientName, 
+                        phone: app.phone, 
+                        totalAmount: app.price, 
+                        history: [entry] 
+                    });
+                }
+            } else {
+                state.cashLogs.push({ id: Date.now().toString(), date: new Date().toISOString(), description: `${app.serviceName} - ${app.clientName}`, amount: app.price });
+            }
+            saveState();
+        }
+
+        function sendWhatsApp(name, phone, service, time, date, price) {
+            let cleanPhone = phone.replace(/\D/g, '');
+            let msg = `¡Hola ${name}! 👋 Turno en *${state.config.name}* 💈.\n📅 Fecha: ${date}\n⏰ Hora: ${time}\n✂️ Servicio: ${service}\n💰 Total: $${price.toLocaleString()}`;
+            window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        function sendFiadoWhatsApp(name, phone, total) {
+            let cleanPhone = phone.replace(/\D/g, '');
+            let msg = `¡Hola ${name}! 👋 Te escribimos de *${state.config.name}* 💈 para recordarte tu saldo pendiente de *$${total.toLocaleString()}*. ¡Gracias!`;
+            window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        function payFiadoTotal(id) {
+            let f = state.fiados.find(x => x.id === id);
+            state.cashLogs.push({ id: Date.now().toString(), date: new Date().toISOString(), description: `Pago Total Fiado - ${f.clientName}`, amount: f.totalAmount });
+            state.fiados = state.fiados.filter(x => x.id !== id);
+            state.activeFiadoMenuId = null;
+            saveState();
+        }
+
+        function openPartialModal(id) {
+            state.partialPaymentFiado = state.fiados.find(x => x.id === id);
+            state.activeFiadoMenuId = null;
+            render();
+        }
+
+        function confirmPartialPayment() {
+            let f = state.partialPaymentFiado;
+            let amt = Number(document.getElementById('partialAmtInput').value);
+            if (isNaN(amt) || amt <= 0) return;
+
+            state.cashLogs.push({ id: Date.now().toString(), date: new Date().toISOString(), description: `Pago Parcial Fiado - ${f.clientName}`, amount: amt });
+            
+            if (!f.history) f.history = [];
+            let now = new Date();
+            f.history.push({
+                type: 'payment',
+                date: now.toLocaleDateString(),
+                time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                amount: amt
+            });
+
+            if (amt >= f.totalAmount) {
+                state.fiados = state.fiados.filter(x => x.id !== f.id);
+            } else {
+                f.totalAmount -= amt;
+            }
+            state.partialPaymentFiado = null;
+            saveState();
+        }
+
+        function saveConfig() {
+            state.config.name = document.getElementById('cfgName').value;
+            state.config.subtitle = document.getElementById('cfgSubtitle').value;
+            state.config.startHour = document.getElementById('cfgStart').value;
+            state.config.endHour = document.getElementById('cfgEnd').value;
+            state.config.slotDuration = Number(document.getElementById('cfgDuration').value);
+            state.config.breakStart = document.getElementById('cfgBreakStart').value;
+            state.config.breakEnd = document.getElementById('cfgBreakEnd').value;
+            saveState();
+            alert('¡Ajustes guardados correctamente!');
+        }
+
+        function clearCashHistory() {
+            if (confirm('¿Estás seguro de que deseas borrar todo el historial de ingresos de caja? Esta acción no se puede deshacer.')) {
+                state.cashLogs = [];
+                saveState();
+                alert('Historial de caja borrado correctamente.');
+            }
+        }
+
+        function addService() {
+            let name = document.getElementById('newSrvName').value;
+            let price = Number(document.getElementById('newSrvPrice').value);
+            if (name && price) {
+                state.services.push({ id: Date.now().toString(), name, price });
+                saveState();
+            }
+        }
+
+        function deleteService(id) {
+            state.services = state.services.filter(s => s.id !== id);
+            saveState();
+        }
+
+        // Inicializar
+        render();
+    </script>
+</body>
+</html>
