@@ -289,14 +289,17 @@
 
         function renderLogoHTML(customClass = "") {
             const style = state.config.logoStyle || 'circle';
-            let containerClass = "w-11 h-11 rounded-2xl overflow-hidden bg-gradient-to-br from-amber-500 to-barber-700 flex items-center justify-center text-white font-bold shadow-md shadow-amber-900/20 " + customClass;
-            let imgClass = "w-full h-full object-cover";
+            // El marco (mosaico) siempre mantiene su tamaño w-11 h-11.
+            // La imagen se agranda un poco por dentro (overflow visible) sin tocar el marco.
+            let containerClass = "relative w-11 h-11 rounded-2xl overflow-visible bg-gradient-to-br from-amber-500 to-barber-700 flex items-center justify-center text-white font-bold shadow-md shadow-amber-900/20 " + customClass;
+            let imgClass = "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[122%] h-[122%] object-cover rounded-2xl";
 
             if (style === 'circle') {
-                containerClass = "w-11 h-11 rounded-full overflow-hidden bg-gradient-to-br from-amber-500 to-barber-700 flex items-center justify-center text-white font-bold shadow-md shadow-amber-900/20 " + customClass;
+                containerClass = "relative w-11 h-11 rounded-full overflow-visible bg-gradient-to-br from-amber-500 to-barber-700 flex items-center justify-center text-white font-bold shadow-md shadow-amber-900/20 " + customClass;
+                imgClass = "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[122%] h-[122%] object-cover rounded-full";
             } else if (style === 'rectangle') {
                 containerClass = "h-11 flex items-center justify-center bg-transparent border-0 shadow-none " + customClass;
-                imgClass = "h-10 max-w-[160px] object-contain";
+                imgClass = "h-12 max-w-[176px] object-contain";
             }
 
             return `
@@ -676,6 +679,25 @@
                             <div class="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-center border border-gray-100/50 dark:border-zinc-800/50">
                                 <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Neto (Día)</p>
                                 <p class="text-xs font-black text-amber-600 dark:text-amber-400 mt-1">${formatARS(dayNet)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-4">
+                        <h2 class="font-bold text-sm tracking-tight flex items-center"><i data-lucide="banknote" class="w-4 h-4 mr-2 text-amber-600 dark:text-amber-500"></i> Total Cobrado (sin fiado)</h2>
+                        <p class="text-[10px] text-gray-400 -mt-2 leading-relaxed">Suma solo lo cobrado en efectivo/transferencia, ventas y abonos de fiado. No incluye saldo fiado pendiente.</p>
+                        <div class="grid grid-cols-3 gap-2.5">
+                            <div class="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-center border border-gray-100/50 dark:border-zinc-800/50">
+                                <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Día</p>
+                                <p class="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-1">${formatARS(calculateRevenue('day'))}</p>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-center border border-gray-100/50 dark:border-zinc-800/50">
+                                <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Semana</p>
+                                <p class="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-1">${formatARS(calculateRevenue('week'))}</p>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-center border border-gray-100/50 dark:border-zinc-800/50">
+                                <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Mes</p>
+                                <p class="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-1">${formatARS(calculateRevenue('month'))}</p>
                             </div>
                         </div>
                     </div>
