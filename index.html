@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ALEXSTYLE - Barbershop Manager</title>
+    <title>ALEXSTYLE - Barbershop Manager Pro</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -20,6 +20,10 @@
                             700: '#92400e',
                             800: '#78350f',
                             900: '#451a03',
+                        },
+                        zinc: {
+                            900: '#121214',
+                            950: '#0a0a0c',
                         }
                     }
                 }
@@ -34,14 +38,13 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="h-full bg-gray-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased flex justify-center">
+<body class="h-full bg-gray-100 dark:bg-black text-gray-900 dark:text-gray-100 font-sans antialiased flex justify-center">
 
-    <div id="app" class="h-full w-full max-w-md flex flex-col bg-white dark:bg-gray-900 shadow-2xl relative overflow-hidden">
-        <!-- Contenido dinámico inyectado por JS -->
+    <div id="app" class="h-full w-full max-w-md flex flex-col bg-white dark:bg-black shadow-2xl relative overflow-hidden">
+        <!-- Contenido dinámico -->
     </div>
 
     <script>
-        // Formateador oficial para Peso Argentino (ARS)
         function formatARS(amount) {
             return Number(amount || 0).toLocaleString('es-AR', {
                 style: 'currency',
@@ -50,12 +53,11 @@
             });
         }
 
-        // Estado Global de la App
         const DEFAULT_CONFIG = {
             name: 'ALEXSTYLE',
             subtitle: 'Barber shop',
             logo: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=150&auto=format&fit=crop&q=80',
-            logoStyle: 'circle', // 'circle', 'square', 'rectangle'
+            logoStyle: 'circle',
             phone: '+5493858400000',
             instagram: '@alexstyle.barber',
             startHour: '09:00',
@@ -63,6 +65,7 @@
             slotDuration: 30,
             breakStart: '13:00',
             breakEnd: '14:00',
+            dailyGoal: 80000,
             darkMode: false
         };
 
@@ -72,17 +75,28 @@
             { id: '3', name: 'Clarito + Corte', price: 55000 },
         ];
 
+        const DEFAULT_PRODUCTS = [
+            { id: '1', name: 'Pomada Mate Efecto Seco', price: 12000, stock: 8 },
+            { id: '2', name: 'Aceite para Barba Premium', price: 10000, stock: 5 },
+        ];
+
         let state = {
             config: JSON.parse(localStorage.getItem('alexstyle_config')) || DEFAULT_CONFIG,
             services: JSON.parse(localStorage.getItem('alexstyle_services')) || DEFAULT_SERVICES,
+            products: JSON.parse(localStorage.getItem('alexstyle_products')) || DEFAULT_PRODUCTS,
             appointments: JSON.parse(localStorage.getItem('alexstyle_appointments')) || [
                 { id: '1', clientName: 'Juan Pérez', phone: '3858123456', date: new Date().toISOString().split('T')[0], time: '10:00', serviceName: 'Corte de Pelo', price: 15000, status: 'pending', paymentMethod: null }
             ],
             fiados: JSON.parse(localStorage.getItem('alexstyle_fiados')) || [],
             cashLogs: JSON.parse(localStorage.getItem('alexstyle_cash')) || [],
+            expenseLogs: JSON.parse(localStorage.getItem('alexstyle_expenses')) || [],
             activeTab: 'agenda',
             selectedDate: new Date().toISOString().split('T')[0],
+            searchQuery: '',
+            fiadoSearchQuery: '',
             isModalOpen: false,
+            isExpenseModalOpen: false,
+            isProductModalOpen: false,
             activeMenuId: null,
             activeFiadoMenuId: null,
             paymentModalApp: null,
@@ -90,13 +104,16 @@
         };
 
         if (!state.config.logoStyle) state.config.logoStyle = 'circle';
+        if (!state.config.dailyGoal) state.config.dailyGoal = 80000;
 
         function saveState() {
             localStorage.setItem('alexstyle_config', JSON.stringify(state.config));
             localStorage.setItem('alexstyle_services', JSON.stringify(state.services));
+            localStorage.setItem('alexstyle_products', JSON.stringify(state.products));
             localStorage.setItem('alexstyle_appointments', JSON.stringify(state.appointments));
             localStorage.setItem('alexstyle_fiados', JSON.stringify(state.fiados));
             localStorage.setItem('alexstyle_cash', JSON.stringify(state.cashLogs));
+            localStorage.setItem('alexstyle_expenses', JSON.stringify(state.expenseLogs));
             render();
         }
 
@@ -160,17 +177,31 @@
             }).reduce((acc, curr) => acc + curr.amount, 0);
         }
 
+        function calculateExpenses(period) {
+            let now = new Date();
+            return state.expenseLogs.filter(log => {
+                let logDate = new Date(log.date);
+                if (period === 'day') return logDate.toDateString() === now.toDateString();
+                if (period === 'week') {
+                    let startOfWeek = new Date(now);
+                    startOfWeek.setDate(now.getDate() - now.getDay());
+                    return logDate >= startOfWeek;
+                }
+                if (period === 'month') return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
+                return true;
+            }).reduce((acc, curr) => acc + curr.amount, 0);
+        }
+
         function renderLogoHTML(customClass = "") {
             const style = state.config.logoStyle || 'circle';
-            let containerClass = "w-12 h-12 rounded-full overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
+            let containerClass = "w-11 h-11 rounded-2xl overflow-hidden bg-gradient-to-br from-amber-500 to-barber-700 flex items-center justify-center text-white font-bold shadow-md shadow-amber-900/20 " + customClass;
             let imgClass = "w-full h-full object-cover";
 
-            if (style === 'square') {
-                containerClass = "w-12 h-12 rounded-xl overflow-hidden bg-barber-500 flex items-center justify-center text-white font-bold shadow-md " + customClass;
-                imgClass = "w-full h-full object-cover";
+            if (style === 'circle') {
+                containerClass = "w-11 h-11 rounded-full overflow-hidden bg-gradient-to-br from-amber-500 to-barber-700 flex items-center justify-center text-white font-bold shadow-md shadow-amber-900/20 " + customClass;
             } else if (style === 'rectangle') {
-                containerClass = "h-12 flex items-center justify-center bg-transparent border-0 shadow-none " + customClass;
-                imgClass = "h-11 max-w-[170px] object-contain";
+                containerClass = "h-11 flex items-center justify-center bg-transparent border-0 shadow-none " + customClass;
+                imgClass = "h-10 max-w-[160px] object-contain";
             }
 
             return `
@@ -180,63 +211,97 @@
             `;
         }
 
+        function renderWeekStrip() {
+            let days = [];
+            let today = new Date();
+            for (let i = -2; i <= 4; i++) {
+                let d = new Date(today);
+                d.setDate(today.getDate() + i);
+                let dateStr = d.toISOString().split('T')[0];
+                let dayName = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+                let dayNum = d.getDate();
+                days.push({ dateStr, dayName, dayNum });
+            }
+
+            return `
+                <div class="flex space-x-2 overflow-x-auto no-scrollbar py-1">
+                    ${days.map(d => {
+                        let isSelected = d.dateStr === state.selectedDate;
+                        return `
+                            <button onclick="changeDate('${d.dateStr}')" class="flex flex-col items-center justify-center min-w-[52px] py-2.5 px-1 rounded-2xl border transition-all ${isSelected ? 'bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-600/30 scale-105' : 'bg-white dark:bg-zinc-900/90 text-gray-600 dark:text-gray-400 border-gray-100 dark:border-zinc-800/80 hover:border-amber-500/50'}">
+                                <span class="text-[10px] uppercase font-bold tracking-wider">${d.dayName}</span>
+                                <span class="text-sm font-black mt-0.5">${d.dayNum}</span>
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
         function render() {
             updateTheme();
             const appEl = document.getElementById('app');
             
             appEl.innerHTML = `
-                <!-- Header -->
-                <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3.5 flex items-center justify-between sticky top-0 z-30">
+                <!-- Header cristal -->
+                <header class="bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-100 dark:border-zinc-900 px-5 py-4 flex items-center justify-between sticky top-0 z-30 transition-colors">
                     <div class="flex items-center space-x-3.5">
                         ${renderLogoHTML()}
                         <div>
-                            <h1 class="font-black text-lg leading-tight tracking-wide">${state.config.name}</h1>
-                            <p class="text-xs text-barber-600 dark:text-barber-400 font-semibold tracking-wider uppercase">${state.config.subtitle || 'Barber shop'}</p>
+                            <h1 class="font-black text-lg tracking-tight leading-tight">${state.config.name}</h1>
+                            <p class="text-[11px] text-red-600 dark:text-red-500 font-bold tracking-widest uppercase">${state.config.subtitle || 'Barber shop'}</p>
                         </div>
                     </div>
-                    <button onclick="toggleDarkMode()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition">
-                        ${state.config.darkMode ? '<i data-lucide="sun" class="w-5 h-5 text-amber-400"></i>' : '<i data-lucide="moon" class="w-5 h-5"></i>'}
+                    <button onclick="toggleDarkMode()" class="p-2.5 rounded-2xl bg-gray-100 dark:bg-zinc-900 text-gray-700 dark:text-gray-300 hover:scale-105 active:scale-95 transition shadow-inner">
+                        ${state.config.darkMode ? '<i data-lucide="sun" class="w-4 h-4 text-amber-400"></i>' : '<i data-lucide="moon" class="w-4 h-4"></i>'}
                     </button>
                 </header>
 
-                <!-- Contenido -->
-                <main class="flex-1 overflow-y-auto pb-24 px-4 pt-4 no-scrollbar">
+                <!-- Cuerpo Principal -->
+                <main class="flex-1 overflow-y-auto pb-28 px-4 pt-4 space-y-4 no-scrollbar">
                     ${state.activeTab === 'agenda' ? renderAgenda() : ''}
                     ${state.activeTab === 'fiados' ? renderFiados() : ''}
                     ${state.activeTab === 'caja' ? renderCaja() : ''}
+                    ${state.activeTab === 'stock' ? renderStock() : ''}
                     ${state.activeTab === 'ajustes' ? renderAjustes() : ''}
                 </main>
 
-                <!-- Botón flotante -->
+                <!-- Botón flotante según pestaña -->
                 ${state.activeTab === 'agenda' ? `
-                    <button onclick="openModal()" class="absolute bottom-20 right-4 w-14 h-14 bg-barber-600 hover:bg-barber-700 text-white rounded-full shadow-2xl flex items-center justify-center transition transform hover:scale-105 z-20">
-                        <i data-lucide="plus" class="w-7 h-7"></i>
+                    <button onclick="openModal()" class="absolute bottom-20 right-5 w-14 h-14 bg-amber-600 hover:bg-amber-500 text-white rounded-2xl shadow-xl shadow-amber-600/40 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 z-20">
+                        <i data-lucide="plus" class="w-6 h-6"></i>
                     </button>
                 ` : ''}
 
-                <!-- Navegación Inferior -->
-                <nav class="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-2 px-6 flex justify-between items-center z-30">
-                    <button onclick="setTab('agenda')" class="flex flex-col items-center space-y-1 ${state.activeTab === 'agenda' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
+                <!-- Barra de Navegación Inferior de 5 Pestañas -->
+                <nav class="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-black/95 backdrop-blur-xl border-t border-gray-100 dark:border-zinc-900 py-3 px-4 flex justify-between items-center z-30 transition-colors">
+                    <button onclick="setTab('agenda')" class="flex flex-col items-center space-y-1 transition ${state.activeTab === 'agenda' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
                         <i data-lucide="calendar" class="w-5 h-5"></i>
-                        <span class="text-[10px]">Agenda</span>
+                        <span class="text-[9px] tracking-wide">Agenda</span>
                     </button>
-                    <button onclick="setTab('fiados')" class="flex flex-col items-center space-y-1 relative ${state.activeTab === 'fiados' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
+                    <button onclick="setTab('fiados')" class="flex flex-col items-center space-y-1 relative transition ${state.activeTab === 'fiados' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
                         <i data-lucide="users" class="w-5 h-5"></i>
-                        <span class="text-[10px]">Fiados</span>
-                        ${state.fiados.length > 0 ? `<span class="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold">${state.fiados.length}</span>` : ''}
+                        <span class="text-[9px] tracking-wide">Fiados</span>
+                        ${state.fiados.length > 0 ? `<span class="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-black shadow-sm">${state.fiados.length}</span>` : ''}
                     </button>
-                    <button onclick="setTab('caja')" class="flex flex-col items-center space-y-1 ${state.activeTab === 'caja' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
-                        <i data-lucide="dollar-sign" class="w-5 h-5"></i>
-                        <span class="text-[10px]">Caja</span>
+                    <button onclick="setTab('caja')" class="flex flex-col items-center space-y-1 transition ${state.activeTab === 'caja' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
+                        <i data-lucide="wallet" class="w-5 h-5"></i>
+                        <span class="text-[9px] tracking-wide">Caja</span>
                     </button>
-                    <button onclick="setTab('ajustes')" class="flex flex-col items-center space-y-1 ${state.activeTab === 'ajustes' ? 'text-barber-600 font-bold' : 'text-gray-400'}">
+                    <button onclick="setTab('stock')" class="flex flex-col items-center space-y-1 transition ${state.activeTab === 'stock' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
+                        <i data-lucide="package" class="w-5 h-5"></i>
+                        <span class="text-[9px] tracking-wide">Stock</span>
+                    </button>
+                    <button onclick="setTab('ajustes')" class="flex flex-col items-center space-y-1 transition ${state.activeTab === 'ajustes' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
                         <i data-lucide="settings" class="w-5 h-5"></i>
-                        <span class="text-[10px]">Ajustes</span>
+                        <span class="text-[9px] tracking-wide">Ajustes</span>
                     </button>
                 </nav>
 
                 <!-- Modales -->
                 ${state.isModalOpen ? renderNewAppointmentModal() : ''}
+                ${state.isExpenseModalOpen ? renderNewExpenseModal() : ''}
+                ${state.isProductModalOpen ? renderNewProductModal() : ''}
                 ${state.paymentModalApp ? renderPaymentModal() : ''}
                 ${state.partialPaymentFiado ? renderPartialModal() : ''}
             `;
@@ -246,58 +311,61 @@
         function renderAgenda() {
             let dayApps = state.appointments
                 .filter(a => a.date === state.selectedDate && a.status !== 'cancelled')
+                .filter(a => a.clientName.toLowerCase().includes(state.searchQuery.toLowerCase()) || a.serviceName.toLowerCase().includes(state.searchQuery.toLowerCase()))
                 .sort((a,b) => a.time.localeCompare(b.time));
 
             return `
                 <div class="space-y-4">
-                    <div class="bg-white dark:bg-gray-900 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                        <div>
-                            <p class="text-xs text-gray-500 font-semibold uppercase">Fecha Seleccionada</p>
-                            <input type="date" value="${state.selectedDate}" onchange="changeDate(this.value)" class="bg-transparent font-bold text-lg text-barber-600 outline-none cursor-pointer">
+                    ${renderWeekStrip()}
+
+                    <div class="flex items-center space-x-2">
+                        <div class="flex-1 bg-white dark:bg-zinc-900/90 rounded-2xl border border-gray-100 dark:border-zinc-800/80 px-3.5 py-2.5 flex items-center space-x-2.5 shadow-sm">
+                            <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+                            <input type="text" value="${state.searchQuery}" oninput="setSearchQuery(this.value)" placeholder="Buscar cliente o servicio..." class="w-full bg-transparent text-xs outline-none">
+                            ${state.searchQuery ? `<button onclick="setSearchQuery('')" class="text-gray-400 hover:text-gray-200"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>` : ''}
                         </div>
-                        <span class="px-2.5 py-1 bg-barber-50 dark:bg-barber-900/30 text-barber-600 text-xs font-semibold rounded-full">
+                        <span class="px-3.5 py-3 bg-amber-50 dark:bg-zinc-900/90 border border-amber-200/50 dark:border-zinc-800 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-2xl shadow-sm whitespace-nowrap">
                             ${dayApps.length} turnos
                         </span>
                     </div>
 
                     <div class="space-y-3">
-                        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider px-1">Turnos del Día</h2>
                         ${dayApps.length === 0 ? `
-                            <div class="text-center py-12 bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-6">
-                                <i data-lucide="calendar" class="w-12 h-12 mx-auto text-gray-300 mb-2"></i>
-                                <p class="text-sm font-medium text-gray-500">No hay turnos agendados para esta fecha.</p>
+                            <div class="text-center py-16 bg-white dark:bg-zinc-900/50 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 p-6">
+                                <i data-lucide="calendar-off" class="w-10 h-10 mx-auto text-gray-300 dark:text-zinc-700 mb-2"></i>
+                                <p class="text-xs font-medium text-gray-400">No hay turnos para esta fecha o búsqueda.</p>
                             </div>
                         ` : dayApps.map(app => `
-                            <div class="p-4 rounded-2xl bg-white dark:bg-gray-900 border shadow-sm relative ${app.status === 'completed' ? 'border-emerald-200' : 'border-gray-100 dark:border-gray-800'}">
+                            <div class="p-4 rounded-3xl bg-white dark:bg-zinc-900/90 border shadow-sm relative transition-all ${app.status === 'completed' ? 'border-emerald-500/30 dark:border-emerald-500/20' : 'border-gray-100 dark:border-zinc-800/80'}">
                                 <div class="flex items-start justify-between">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="p-2.5 rounded-xl bg-barber-50 dark:bg-barber-900/40 text-barber-600 font-bold text-sm flex items-center">
-                                            <i data-lucide="clock" class="w-4 h-4 mr-1"></i> ${app.time}
+                                    <div class="flex items-center space-x-3.5">
+                                        <div class="p-2.5 rounded-2xl bg-amber-50 dark:bg-zinc-800 text-amber-700 dark:text-blue-400 font-black text-xs flex items-center shadow-inner">
+                                            <i data-lucide="clock" class="w-3.5 h-3.5 mr-1.5"></i> ${app.time}
                                         </div>
                                         <div>
-                                            <h3 class="font-bold text-base">${app.clientName}</h3>
-                                            <p class="text-xs text-gray-500">${app.serviceName}</p>
+                                            <h3 class="font-bold text-sm tracking-tight">${app.clientName}</h3>
+                                            <p class="text-[11px] text-gray-400 font-medium">${app.serviceName}</p>
                                         </div>
                                     </div>
                                     <div class="flex items-center space-x-2">
-                                        <span class="font-bold text-barber-600 text-sm">${formatARS(app.price)}</span>
+                                        <span class="font-black text-amber-600 dark:text-emerald-400 text-sm tracking-tight">${formatARS(app.price)}</span>
                                         <div class="relative">
-                                            <button onclick="toggleMenu('${app.id}')" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
-                                                <i data-lucide="menu" class="w-5 h-5"></i>
+                                            <button onclick="toggleMenu('${app.id}')" class="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 transition">
+                                                <i data-lucide="more-vertical" class="w-4 h-4"></i>
                                             </button>
                                             ${state.activeMenuId === app.id ? `
-                                                <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-20">
-                                                    ${app.status === 'pending' ? `<button onclick="openPaymentModal('${app.id}')" class="w-full text-left px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="dollar-sign" class="w-4 h-4"></i> Cobrar / Finalizar</button>` : ''}
-                                                    <button onclick="sendWhatsApp('${app.clientName}', '${app.phone}', '${app.serviceName}', '${app.time}', '${app.date}', ${app.price})" class="w-full text-left px-4 py-2 text-xs font-semibold text-sky-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="share-2" class="w-4 h-4"></i> Enviar WhatsApp</button>
-                                                    <button onclick="cancelAppointment('${app.id}')" class="w-full text-left px-4 py-2 text-xs font-semibold text-red-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="x-circle" class="w-4 h-4"></i> Cancelar Turno</button>
+                                                <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-zinc-800 py-1.5 z-20 overflow-hidden">
+                                                    ${app.status === 'pending' ? `<button onclick="openPaymentModal('${app.id}')" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-gray-50 dark:hover:bg-zinc-800 flex items-center space-x-2.5"><i data-lucide="dollar-sign" class="w-4 h-4"></i> Cobrar / Finalizar</button>` : ''}
+                                                    <button onclick="sendWhatsApp('${app.clientName}', '${app.phone}', '${app.serviceName}', '${app.time}', '${app.date}', ${app.price})" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-gray-50 dark:hover:bg-zinc-800 flex items-center space-x-2.5"><i data-lucide="share-2" class="w-4 h-4"></i> Enviar WhatsApp</button>
+                                                    <button onclick="cancelAppointment('${app.id}')" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-zinc-800 flex items-center space-x-2.5"><i data-lucide="x-circle" class="w-4 h-4"></i> Cancelar Turno</button>
                                                 </div>
                                             ` : ''}
                                         </div>
                                     </div>
                                 </div>
-                                <div class="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-400">
+                                <div class="mt-3 pt-2.5 border-t border-gray-100 dark:border-zinc-800/60 flex items-center justify-between text-[11px] text-gray-400 font-medium">
                                     <span>Tel: ${app.phone}</span>
-                                    <span>${app.status === 'completed' ? 'Cobrado (' + app.paymentMethod + ')' : 'Pendiente'}</span>
+                                    <span class="${app.status === 'completed' ? 'text-emerald-500 font-bold' : ''}">${app.status === 'completed' ? 'Cobrado (' + app.paymentMethod + ')' : 'Pendiente'}</span>
                                 </div>
                             </div>
                         `).join('')}
@@ -308,60 +376,68 @@
 
         function renderFiados() {
             let totalDebt = state.fiados.reduce((acc, curr) => acc + curr.totalAmount, 0);
+            let filteredFiados = state.fiados.filter(f => f.clientName.toLowerCase().includes(state.fiadoSearchQuery.toLowerCase()));
+
             return `
                 <div class="space-y-4">
-                    <div class="bg-gradient-to-r from-amber-600 to-barber-700 p-4 rounded-2xl text-white shadow-lg">
-                        <p class="text-xs uppercase tracking-wider text-amber-200 font-semibold">Total Adeudado (Fiados)</p>
-                        <h2 class="text-2xl font-black mt-1">${formatARS(totalDebt)}</h2>
-                        <p class="text-xs text-amber-100 mt-1">Cuentas corrientes activas</p>
+                    <div class="bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 p-5 rounded-3xl text-white shadow-xl shadow-amber-900/20 relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
+                        <p class="text-[10px] uppercase tracking-widest text-amber-200 font-bold">Total Adeudado (Fiados)</p>
+                        <h2 class="text-3xl font-black mt-1 tracking-tight">${formatARS(totalDebt)}</h2>
+                        <p class="text-xs text-amber-100/80 mt-1 font-medium">Cuentas corrientes activas</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-zinc-900/90 rounded-2xl border border-gray-100 dark:border-zinc-800/80 px-3.5 py-2.5 flex items-center space-x-2.5 shadow-sm">
+                        <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+                        <input type="text" value="${state.fiadoSearchQuery}" oninput="setFiadoSearchQuery(this.value)" placeholder="Buscar cliente en fiados..." class="w-full bg-transparent text-xs outline-none">
+                        ${state.fiadoSearchQuery ? `<button onclick="setFiadoSearchQuery('')" class="text-gray-400 hover:text-gray-200"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>` : ''}
                     </div>
 
                     <div class="space-y-3">
-                        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider px-1">Clientes con Deuda</h2>
-                        ${state.fiados.length === 0 ? `
-                            <div class="text-center py-12 bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-6">
-                                <i data-lucide="shield-check" class="w-12 h-12 mx-auto text-emerald-400 mb-2"></i>
-                                <p class="text-sm font-medium text-gray-600 dark:text-gray-300">No hay clientes con fiados pendientes.</p>
+                        ${filteredFiados.length === 0 ? `
+                            <div class="text-center py-14 bg-white dark:bg-zinc-900/50 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 p-6">
+                                <i data-lucide="shield-check" class="w-10 h-10 mx-auto text-emerald-500 mb-2"></i>
+                                <p class="text-xs font-medium text-gray-400">No hay clientes con fiados pendientes.</p>
                             </div>
-                        ` : state.fiados.map(f => `
-                            <div class="p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm space-y-3 relative">
+                        ` : filteredFiados.map(f => `
+                            <div class="p-4 rounded-3xl bg-white dark:bg-zinc-900/90 border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3 relative">
                                 <div class="flex items-start justify-between">
                                     <div>
-                                        <h3 class="font-bold text-base">${f.clientName}</h3>
-                                        <p class="text-xs text-gray-500">Tel: ${f.phone}</p>
+                                        <h3 class="font-bold text-sm tracking-tight">${f.clientName}</h3>
+                                        <p class="text-[11px] text-gray-400 font-medium">Tel: ${f.phone}</p>
                                     </div>
                                     <div class="flex items-center space-x-2">
-                                        <span class="font-extrabold text-red-600 text-base">${formatARS(f.totalAmount)}</span>
+                                        <span class="font-black text-red-600 dark:text-emerald-400 text-sm tracking-tight">${formatARS(f.totalAmount)}</span>
                                         <div class="relative">
-                                            <button onclick="toggleFiadoMenu('${f.id}')" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
-                                                <i data-lucide="menu" class="w-5 h-5"></i>
+                                            <button onclick="toggleFiadoMenu('${f.id}')" class="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 transition">
+                                                <i data-lucide="more-vertical" class="w-4 h-4"></i>
                                             </button>
                                             ${state.activeFiadoMenuId === f.id ? `
-                                                <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-20">
-                                                    <button onclick="sendFiadoWhatsApp('${f.clientName}', '${f.phone}', ${f.totalAmount})" class="w-full text-left px-4 py-2 text-xs font-semibold text-sky-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="share-2" class="w-4 h-4"></i> Recordatorio WhatsApp</button>
-                                                    <button onclick="payFiadoTotal('${f.id}')" class="w-full text-left px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="check-circle" class="w-4 h-4"></i> Abonar Total (Caja)</button>
-                                                    <button onclick="openPartialModal('${f.id}')" class="w-full text-left px-4 py-2 text-xs font-semibold text-amber-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2"><i data-lucide="wallet" class="w-4 h-4"></i> Pago Parcial</button>
+                                                <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-zinc-800 py-1.5 z-20 overflow-hidden">
+                                                    <button onclick="sendFiadoWhatsApp('${f.clientName}', '${f.phone}', ${f.totalAmount})" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-gray-50 dark:hover:bg-zinc-800 flex items-center space-x-2.5"><i data-lucide="share-2" class="w-4 h-4"></i> Recordatorio WhatsApp</button>
+                                                    <button onclick="payFiadoTotal('${f.id}')" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-gray-50 dark:hover:bg-zinc-800 flex items-center space-x-2.5"><i data-lucide="check-circle" class="w-4 h-4"></i> Abonar Total (Caja)</button>
+                                                    <button onclick="openPartialModal('${f.id}')" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-gray-50 dark:hover:bg-zinc-800 flex items-center space-x-2.5"><i data-lucide="wallet" class="w-4 h-4"></i> Pago Parcial</button>
                                                 </div>
                                             ` : ''}
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="border-t border-gray-100 dark:border-gray-800 pt-3 space-y-2">
-                                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Detalle de Cuenta:</p>
+                                <div class="border-t border-gray-100 dark:border-zinc-800/60 pt-3 space-y-2">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Detalle de Cuenta:</p>
                                     <div class="space-y-1.5">
                                         ${(f.history || []).map(h => {
                                             let isPayment = h.type === 'payment';
                                             return `
-                                                <div class="flex items-center justify-between text-xs bg-gray-50 dark:bg-gray-800/50 p-2 rounded-xl">
-                                                    <div class="flex items-center space-x-2">
+                                                <div class="flex items-center justify-between text-xs bg-gray-50 dark:bg-zinc-800/50 p-2.5 rounded-2xl">
+                                                    <div class="flex items-center space-x-2.5">
                                                         <i data-lucide="${isPayment ? 'arrow-down-left' : 'scissors'}" class="w-3.5 h-3.5 ${isPayment ? 'text-emerald-500' : 'text-amber-500'}"></i>
                                                         <div>
-                                                            <p class="font-semibold">${isPayment ? 'Pago Parcial' : (h.service || 'Servicio')}</p>
+                                                            <p class="font-bold text-xs">${isPayment ? 'Pago Parcial' : (h.service || 'Servicio')}</p>
                                                             <p class="text-[10px] text-gray-400">${h.date} ${h.time ? ' - ' + h.time : ''}</p>
                                                         </div>
                                                     </div>
-                                                    <span class="font-bold ${isPayment ? 'text-emerald-600' : 'text-red-600'}">
+                                                    <span class="font-black ${isPayment ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}">
                                                         ${isPayment ? '-' : '+'}${formatARS(h.amount)}
                                                     </span>
                                                 </div>
@@ -377,33 +453,108 @@
         }
 
         function renderCaja() {
+            let dayRev = calculateRevenue('day');
+            let dayExp = calculateExpenses('day');
+            let dayNet = dayRev - dayExp;
+
+            let goal = state.config.dailyGoal || 80000;
+            let percent = Math.min(Math.round((dayRev / goal) * 100), 100);
+            let goalReached = dayRev >= goal;
+
             return `
                 <div class="space-y-4">
-                    <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
-                        <h2 class="font-bold text-base flex items-center"><i data-lucide="wallet" class="w-5 h-5 mr-2 text-barber-600"></i> Control de Caja</h2>
-                        <div class="grid grid-cols-3 gap-2">
-                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl text-center">
-                                <p class="text-[10px] text-gray-400 uppercase font-bold">Día</p>
-                                <p class="text-sm font-black text-barber-600 mt-1">${formatARS(calculateRevenue('day'))}</p>
+                    <!-- Control de Caja, Meta y Gastos -->
+                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-4">
+                        <div class="flex justify-between items-center">
+                            <h2 class="font-bold text-sm tracking-tight flex items-center"><i data-lucide="wallet" class="w-4 h-4 mr-2 text-amber-600 dark:text-amber-500"></i> Balance Financiero</h2>
+                            <button onclick="openExpenseModal()" class="px-3 py-1.5 bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 transition flex items-center space-x-1.5">
+                                <i data-lucide="minus-circle" class="w-3.5 h-3.5"></i><span>Registrar Gasto</span>
+                            </button>
+                        </div>
+
+                        <!-- Barra de Meta Diaria con Alerta de Éxito -->
+                        <div class="p-3.5 rounded-2xl ${goalReached ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-gray-50 dark:bg-zinc-800/50'} space-y-2">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="font-bold ${goalReached ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}">Meta Diaria (${percent}%)</span>
+                                <span class="font-black ${goalReached ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-500'}">${goalReached ? '¡Meta Superada!' : formatARS(dayRev) + ' / ' + formatARS(goal)}</span>
                             </div>
-                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl text-center">
-                                <p class="text-[10px] text-gray-400 uppercase font-bold">Semana</p>
-                                <p class="text-sm font-black text-barber-600 mt-1">${formatARS(calculateRevenue('week'))}</p>
-                            </div>
-                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl text-center">
-                                <p class="text-[10px] text-gray-400 uppercase font-bold">Mes</p>
-                                <p class="text-sm font-black text-barber-600 mt-1">${formatARS(calculateRevenue('month'))}</p>
+                            <div class="w-full bg-gray-200 dark:bg-zinc-700 h-2 rounded-full overflow-hidden">
+                                <div class="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
                             </div>
                         </div>
-                        <p class="text-[11px] text-gray-400 italic">* Regla: Los servicios fiados suman a caja únicamente cuando el cliente los abona (total o parcialmente).</p>
+
+                        <!-- Resumen Ingresos, Gastos y Neto -->
+                        <div class="grid grid-cols-3 gap-2.5 pt-1">
+                            <div class="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-center border border-gray-100/50 dark:border-zinc-800/50">
+                                <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Ingresos (Día)</p>
+                                <p class="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-1">${formatARS(dayRev)}</p>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-center border border-gray-100/50 dark:border-zinc-800/50">
+                                <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Gastos (Día)</p>
+                                <p class="text-xs font-black text-red-600 dark:text-red-400 mt-1">${formatARS(dayExp)}</p>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-center border border-gray-100/50 dark:border-zinc-800/50">
+                                <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Neto (Día)</p>
+                                <p class="text-xs font-black text-amber-600 dark:text-amber-400 mt-1">${formatARS(dayNet)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pestaña de Movimientos (Ingresos y Gastos) -->
+                    <div class="space-y-3">
+                        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">Últimos Movimientos</h2>
+                        ${state.cashLogs.length === 0 && state.expenseLogs.length === 0 ? `<div class="text-center py-10 text-xs text-gray-400 bg-white dark:bg-zinc-900/50 rounded-3xl border border-gray-100 dark:border-zinc-800">No hay transacciones aún.</div>` : ''}
+                        
+                        ${state.cashLogs.slice().reverse().map(l => `
+                            <div class="p-3.5 bg-white dark:bg-zinc-900/90 rounded-2xl border border-gray-100 dark:border-zinc-800/80 flex items-center justify-between text-xs shadow-sm">
+                                <div class="flex items-center space-x-3">
+                                    <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-xl"><i data-lucide="arrow-down-left" class="w-4 h-4"></i></div>
+                                    <div><p class="font-bold tracking-tight">${l.description}</p><p class="text-[10px] text-gray-400 mt-0.5">${new Date(l.date).toLocaleString()}</p></div>
+                                </div>
+                                <span class="font-black text-emerald-600 dark:text-emerald-400">+${formatARS(l.amount)}</span>
+                            </div>
+                        `).join('')}
+
+                        ${state.expenseLogs.slice().reverse().map(e => `
+                            <div class="p-3.5 bg-white dark:bg-zinc-900/90 rounded-2xl border border-red-100 dark:border-zinc-800/80 flex items-center justify-between text-xs shadow-sm">
+                                <div class="flex items-center space-x-3">
+                                    <div class="p-2 bg-red-50 dark:bg-red-500/10 text-red-600 rounded-xl"><i data-lucide="arrow-up-right" class="w-4 h-4"></i></div>
+                                    <div><p class="font-bold tracking-tight">Gasto: ${e.description}</p><p class="text-[10px] text-gray-400 mt-0.5">${new Date(e.date).toLocaleString()}</p></div>
+                                </div>
+                                <span class="font-black text-red-600 dark:text-red-400">-${formatARS(e.amount)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStock() {
+            return `
+                <div class="space-y-4">
+                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-4">
+                        <div class="flex justify-between items-center">
+                            <h2 class="font-bold text-sm tracking-tight flex items-center"><i data-lucide="package" class="w-4 h-4 mr-2 text-amber-600 dark:text-amber-500"></i> Inventario y Productos</h2>
+                            <button onclick="openProductModal()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-amber-600/20">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i><span>Nuevo Producto</span>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400 leading-relaxed">Registra pomadas, ceras y accesorios. Al vender un producto, el stock se descuenta automáticamente y el monto ingresa a caja.</p>
                     </div>
 
                     <div class="space-y-3">
-                        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider px-1">Últimos Ingresos</h2>
-                        ${state.cashLogs.length === 0 ? `<div class="text-center py-8 text-xs text-gray-400 bg-white dark:bg-gray-900 rounded-2xl">No hay transacciones aún.</div>` : state.cashLogs.slice().reverse().map(l => `
-                            <div class="p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs">
-                                <div><p class="font-bold">${l.description}</p><p class="text-[10px] text-gray-400">${new Date(l.date).toLocaleString()}</p></div>
-                                <span class="font-extrabold text-emerald-600">+${formatARS(l.amount)}</span>
+                        ${state.products.length === 0 ? `<div class="text-center py-10 text-xs text-gray-400 bg-white dark:bg-zinc-900/50 rounded-3xl border border-gray-100 dark:border-zinc-800">No hay productos en stock.</div>` : state.products.map(p => `
+                            <div class="p-4 bg-white dark:bg-zinc-900/90 rounded-3xl border border-gray-100 dark:border-zinc-800/80 flex items-center justify-between text-xs shadow-sm">
+                                <div>
+                                    <h3 class="font-bold text-sm tracking-tight">${p.name}</h3>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">Precio: <strong class="dark:text-emerald-400">${formatARS(p.price)}</strong> | Stock: <span class="font-bold ${p.stock <= 2 ? 'text-red-500' : 'text-amber-600 dark:text-amber-400'}">${p.stock} un.</span></p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="sellProduct('${p.id}')" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition shadow-md shadow-emerald-600/20 flex items-center space-x-1">
+                                        <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i><span>Vender</span>
+                                    </button>
+                                    <button onclick="deleteProduct('${p.id}')" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-zinc-800 rounded-xl transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
                             </div>
                         `).join('')}
                     </div>
@@ -414,73 +565,97 @@
         function renderAjustes() {
             const currentStyle = state.config.logoStyle || 'circle';
             return `
-                <div class="space-y-6">
-                    <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
-                        <h2 class="font-bold text-sm uppercase text-barber-600">Negocio y Horarios</h2>
+                <div class="space-y-5">
+                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-4">
+                        <h2 class="font-bold text-xs uppercase tracking-widest text-amber-600 dark:text-amber-500">Negocio y Horarios</h2>
                         
                         <div>
-                            <label class="text-xs text-gray-500">Logo de la App (Desde tu Galería)</label>
-                            <div class="flex items-center space-x-3 mt-2">
+                            <label class="text-[11px] font-medium text-gray-400">Logo de la App (Desde tu Galería)</label>
+                            <div class="flex items-center space-x-3.5 mt-2">
                                 ${renderLogoHTML()}
-                                <input type="file" id="cfgLogoFile" accept="image/*" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-barber-50 file:text-barber-700 hover:file:bg-barber-100 dark:file:bg-gray-800 dark:file:text-barber-400 cursor-pointer">
+                                <input type="file" id="cfgLogoFile" accept="image/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 dark:file:bg-zinc-800 dark:file:text-amber-400 cursor-pointer">
                             </div>
                         </div>
 
                         <div>
-                            <label class="text-xs text-gray-500">Formato / Forma del Logo</label>
-                            <select id="cfgLogoStyle" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                            <label class="text-[11px] font-medium text-gray-400">Formato / Forma del Logo</label>
+                            <select id="cfgLogoStyle" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
                                 <option value="circle" ${currentStyle === 'circle' ? 'selected' : ''}>Circular</option>
                                 <option value="square" ${currentStyle === 'square' ? 'selected' : ''}>Cuadrado</option>
                                 <option value="rectangle" ${currentStyle === 'rectangle' ? 'selected' : ''}>Rectangular / Horizontal (Sin recuadro ni bordes)</option>
                             </select>
                         </div>
 
-                        <div>
-                            <label class="text-xs text-gray-500">Nombre Principal</label>
-                            <input type="text" id="cfgName" value="${state.config.name}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
-                        </div>
-                        <div>
-                            <label class="text-xs text-gray-500">Subtítulo / Eslogan (Encabezado)</label>
-                            <input type="text" id="cfgSubtitle" value="${state.config.subtitle || 'Barber shop'}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="text-xs text-gray-500">Apertura</label><input type="time" id="cfgStart" value="${state.config.startHour}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
-                            <div><label class="text-xs text-gray-500">Cierre</label><input type="time" id="cfgEnd" value="${state.config.endHour}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="text-xs text-gray-500">Minutos por Cliente</label><input type="number" id="cfgDuration" value="${state.config.slotDuration}" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
+                        <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="text-xs text-gray-500">Almuerzo Inicio/Fin</label>
-                                <div class="flex space-x-1 mt-1">
-                                    <input type="time" id="cfgBreakStart" value="${state.config.breakStart}" class="w-1/2 px-1 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs outline-none">
-                                    <input type="time" id="cfgBreakEnd" value="${state.config.breakEnd}" class="w-1/2 px-1 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs outline-none">
+                                <label class="text-[11px] font-medium text-gray-400">Nombre Principal</label>
+                                <input type="text" id="cfgName" value="${state.config.name}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
+                            </div>
+                            <div>
+                                <label class="text-[11px] font-medium text-gray-400">Meta Diaria ($)</label>
+                                <input type="number" id="cfgGoal" value="${state.config.dailyGoal || 80000}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[11px] font-medium text-gray-400">Subtítulo / Eslogan (Encabezado)</label>
+                            <input type="text" id="cfgSubtitle" value="${state.config.subtitle || 'Barber shop'}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="text-[11px] font-medium text-gray-400">Apertura</label><input type="time" id="cfgStart" value="${state.config.startHour}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                            <div><label class="text-[11px] font-medium text-gray-400">Cierre</label><input type="time" id="cfgEnd" value="${state.config.endHour}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="text-[11px] font-medium text-gray-400">Minutos por Cliente</label><input type="number" id="cfgDuration" value="${state.config.slotDuration}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                            <div>
+                                <label class="text-[11px] font-medium text-gray-400">Almuerzo Inicio/Fin</label>
+                                <div class="flex space-x-1.5 mt-1.5">
+                                    <input type="time" id="cfgBreakStart" value="${state.config.breakStart}" class="w-1/2 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
+                                    <input type="time" id="cfgBreakEnd" value="${state.config.breakEnd}" class="w-1/2 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
                                 </div>
                             </div>
                         </div>
-                        <button onclick="saveConfig()" class="w-full py-2 bg-barber-600 text-white font-bold rounded-xl text-xs">Guardar Cambios</button>
+                        <button onclick="saveConfig()" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-amber-600/20 transition">Guardar Cambios</button>
                     </div>
 
-                    <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
-                        <h2 class="font-bold text-sm uppercase text-barber-600">Servicios y Precios</h2>
+                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3.5">
+                        <h2 class="font-bold text-xs uppercase tracking-widest text-amber-600 dark:text-amber-500">Servicios y Precios</h2>
                         ${state.services.map(s => `
-                            <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-2 rounded-xl text-xs">
-                                <span>${s.name} - ${formatARS(s.price)}</span>
-                                <button onclick="deleteService('${s.id}')" class="text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            <div class="flex justify-between items-center bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-xs border border-gray-100/50 dark:border-zinc-800/50">
+                                <span class="font-medium">${s.name} - <strong class="dark:text-emerald-400 font-bold">${formatARS(s.price)}</strong></span>
+                                <button onclick="deleteService('${s.id}')" class="text-red-500 p-1 hover:bg-red-50 dark:hover:bg-zinc-800 rounded-lg transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                             </div>
                         `).join('')}
                         <div class="flex space-x-2 pt-2">
-                            <input type="text" id="newSrvName" placeholder="Servicio..." class="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs outline-none">
-                            <input type="number" id="newSrvPrice" placeholder="Precio ($)" class="w-24 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs outline-none">
-                            <button onclick="addService()" class="px-3 py-2 bg-barber-600 text-white rounded-xl text-xs font-bold"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                            <input type="text" id="newSrvName" placeholder="Servicio..." class="flex-1 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
+                            <input type="number" id="newSrvPrice" placeholder="Precio ($)" class="w-24 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
+                            <button onclick="addService()" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-2xl text-xs font-bold transition shadow-md shadow-amber-600/20"><i data-lucide="plus" class="w-4 h-4"></i></button>
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
-                        <h2 class="font-bold text-sm uppercase text-red-600">Gestión de Historial</h2>
-                        <p class="text-xs text-gray-500">Puedes vaciar el historial de transacciones y registros de caja si deseas reiniciar las estadísticas.</p>
-                        <button onclick="clearCashHistory()" class="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition">
+                    <!-- Respaldo y Restauración de Datos -->
+                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3.5">
+                        <h2 class="font-bold text-xs uppercase tracking-widest text-sky-500">Respaldo y Seguridad</h2>
+                        <p class="text-xs text-gray-400 leading-relaxed">Exporta una copia de seguridad de todos tus datos o restáurala en cualquier dispositivo.</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="exportBackup()" class="py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-2xl text-xs shadow-md shadow-sky-600/20 transition flex items-center justify-center space-x-1.5">
+                                <i data-lucide="download" class="w-4 h-4"></i><span>Exportar Backup</span>
+                            </button>
+                            <label class="py-2.5 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-bold rounded-2xl text-xs cursor-pointer transition flex items-center justify-center space-x-1.5">
+                                <i data-lucide="upload" class="w-4 h-4"></i><span>Restaurar</span>
+                                <input type="file" id="importFile" accept=".json" onchange="importBackup(event)" class="hidden">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3">
+                        <h2 class="font-bold text-xs uppercase tracking-widest text-red-500">Gestión de Historial</h2>
+                        <p class="text-xs text-gray-400 leading-relaxed">Puedes vaciar el historial de transacciones y registros de caja si deseas reiniciar las estadísticas.</p>
+                        <button onclick="clearCashHistory()" class="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-2 shadow-lg shadow-red-600/20 transition">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            <span>Borrar Historial de Caja</span>
+                            <span>Borrar Historial de Caja y Gastos</span>
                         </button>
                     </div>
                 </div>
@@ -490,30 +665,65 @@
         function renderNewAppointmentModal() {
             let slots = getAvailableSlots();
             return `
-                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-                    <div class="bg-white dark:bg-gray-900 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl space-y-4">
-                        <div class="flex justify-between border-b pb-3 dark:border-gray-800">
-                            <h3 class="font-bold text-base">Nuevo Turno</h3>
-                            <button onclick="closeModal()"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    <div class="bg-white dark:bg-zinc-900 w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl space-y-4 border-t sm:border border-zinc-800">
+                        <div class="flex justify-between items-center border-b pb-3 dark:border-zinc-800">
+                            <h3 class="font-bold text-base tracking-tight">Nuevo Turno</h3>
+                            <button onclick="closeModal()" class="p-1 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400"><i data-lucide="x" class="w-5 h-5"></i></button>
                         </div>
-                        <form onsubmit="createAppointment(event)" class="space-y-3">
-                            <div><label class="text-xs text-gray-500">Cliente</label><input type="text" id="modalClient" required placeholder="Nombre..." class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
-                            <div><label class="text-xs text-gray-500">Teléfono</label><input type="text" id="modalPhone" placeholder="Ej. 3858123456" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none"></div>
+                        <form onsubmit="createAppointment(event)" class="space-y-3.5">
+                            <div><label class="text-[11px] font-medium text-gray-400">Cliente</label><input type="text" id="modalClient" required placeholder="Nombre..." class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                            <div><label class="text-[11px] font-medium text-gray-400">Teléfono</label><input type="text" id="modalPhone" placeholder="Ej. 3858123456" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
                             <div>
-                                <label class="text-xs text-gray-500">Servicio</label>
-                                <select id="modalService" class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                                <label class="text-[11px] font-medium text-gray-400">Servicio</label>
+                                <select id="modalService" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
                                     ${state.services.map(s => `<option value="${s.id}">${s.name} - ${formatARS(s.price)}</option>`).join('')}
                                 </select>
                             </div>
                             <div>
-                                <label class="text-xs text-gray-500">Horario (Automático)</label>
-                                <select id="modalTime" required class="w-full mt-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
+                                <label class="text-[11px] font-medium text-gray-400">Horario (Automático)</label>
+                                <select id="modalTime" required class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
                                     <option value="">Seleccionar...</option>
                                     ${slots.map(sl => `<option value="${sl}">${sl}</option>`).join('')}
                                 </select>
                             </div>
-                            <button type="submit" class="w-full py-3 bg-barber-600 text-white font-bold rounded-xl mt-4">Crear Turno</button>
+                            <button type="submit" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-2xl mt-2 shadow-lg shadow-amber-600/25 transition">Crear Turno</button>
                         </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNewExpenseModal() {
+            return `
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 border border-zinc-800">
+                        <h3 class="font-bold text-base tracking-tight">Registrar Gasto o Egrese</h3>
+                        <form onsubmit="createExpense(event)" class="space-y-3.5">
+                            <div><label class="text-[11px] font-medium text-gray-400">Descripción</label><input type="text" id="expenseDesc" required placeholder="Ej. Alquiler, Cuchillas, Luz..." class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                            <div><label class="text-[11px] font-medium text-gray-400">Monto ($)</label><input type="number" id="expenseAmt" required placeholder="0" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                            <button type="submit" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-red-600/20 transition">Guardar Gasto</button>
+                        </form>
+                        <button onclick="state.isExpenseModalOpen=false;render()" class="w-full py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-400 hover:text-gray-200 rounded-2xl text-xs font-semibold transition">Cancelar</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNewProductModal() {
+            return `
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 border border-zinc-800">
+                        <h3 class="font-bold text-base tracking-tight">Nuevo Producto en Stock</h3>
+                        <form onsubmit="createProduct(event)" class="space-y-3.5">
+                            <div><label class="text-[11px] font-medium text-gray-400">Nombre del Producto</label><input type="text" id="prodName" required placeholder="Ej. Cera modeladora..." class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div><label class="text-[11px] font-medium text-gray-400">Precio ($)</label><input type="number" id="prodPrice" required placeholder="0" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                                <div><label class="text-[11px] font-medium text-gray-400">Stock Inicial</label><input type="number" id="prodStock" required placeholder="0" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                            </div>
+                            <button type="submit" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-amber-600/20 transition">Añadir Producto</button>
+                        </form>
+                        <button onclick="state.isProductModalOpen=false;render()" class="w-full py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-400 hover:text-gray-200 rounded-2xl text-xs font-semibold transition">Cancelar</button>
                     </div>
                 </div>
             `;
@@ -522,16 +732,16 @@
         function renderPaymentModal() {
             let app = state.paymentModalApp;
             return `
-                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
-                        <h3 class="font-bold text-base text-center">Cobrar a ${app.clientName}</h3>
-                        <p class="text-xs text-center text-gray-400">${app.serviceName} (${formatARS(app.price)})</p>
-                        <div class="space-y-2 pt-2">
-                            <button onclick="processPayment('efectivo')" class="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl text-xs">Efectivo (Caja)</button>
-                            <button onclick="processPayment('transferencia')" class="w-full py-3 bg-sky-600 text-white font-bold rounded-xl text-xs">Transferencia (Caja)</button>
-                            <button onclick="processPayment('fiado')" class="w-full py-3 bg-amber-600 text-white font-bold rounded-xl text-xs">Fiado (Cuenta Corriente)</button>
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 border border-zinc-800">
+                        <h3 class="font-bold text-base text-center tracking-tight">Cobrar a ${app.clientName}</h3>
+                        <p class="text-xs text-center text-gray-400">${app.serviceName} (<span class="dark:text-emerald-400 font-bold">${formatARS(app.price)}</span>)</p>
+                        <div class="space-y-2.5 pt-2">
+                            <button onclick="processPayment('efectivo')" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-emerald-600/20 transition">Efectivo (Caja)</button>
+                            <button onclick="processPayment('transferencia')" class="w-full py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-sky-600/20 transition">Transferencia (Caja)</button>
+                            <button onclick="processPayment('fiado')" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-amber-600/20 transition">Fiado (Cuenta Corriente)</button>
                         </div>
-                        <button onclick="state.paymentModalApp=null;render()" class="w-full py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-xl text-xs">Cancelar</button>
+                        <button onclick="state.paymentModalApp=null;render()" class="w-full py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-400 hover:text-gray-200 rounded-2xl text-xs font-semibold transition">Cancelar</button>
                     </div>
                 </div>
             `;
@@ -539,13 +749,13 @@
 
         function renderPartialModal() {
             return `
-                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
-                        <h3 class="font-bold text-base text-center">Pago Parcial - ${state.partialPaymentFiado.clientName}</h3>
-                        <p class="text-xs text-center text-gray-400">Deuda actual: ${formatARS(state.partialPaymentFiado.totalAmount)}</p>
-                        <input type="number" id="partialAmtInput" placeholder="Monto abonado ($)" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm outline-none">
-                        <button onclick="confirmPartialPayment()" class="w-full py-3 bg-barber-600 text-white font-bold rounded-xl text-xs">Confirmar Abono (Suma a Caja)</button>
-                        <button onclick="state.partialPaymentFiado=null;render()" class="w-full py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-xl text-xs">Cancelar</button>
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 border border-zinc-800">
+                        <h3 class="font-bold text-base text-center tracking-tight">Pago Parcial - ${state.partialPaymentFiado.clientName}</h3>
+                        <p class="text-xs text-center text-gray-400">Deuda actual: <span class="dark:text-emerald-400 font-bold">${formatARS(state.partialPaymentFiado.totalAmount)}</span></p>
+                        <input type="number" id="partialAmtInput" placeholder="Monto abonado ($)" class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
+                        <button onclick="confirmPartialPayment()" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-amber-600/20 transition">Confirmar Abono (Suma a Caja)</button>
+                        <button onclick="state.partialPaymentFiado=null;render()" class="w-full py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-400 hover:text-gray-200 rounded-2xl text-xs font-semibold transition">Cancelar</button>
                     </div>
                 </div>
             `;
@@ -554,10 +764,14 @@
         function setTab(tab) { state.activeTab = tab; state.activeMenuId = null; state.activeFiadoMenuId = null; render(); }
         function toggleDarkMode() { state.config.darkMode = !state.config.darkMode; saveState(); }
         function changeDate(d) { state.selectedDate = d; render(); }
+        function setSearchQuery(q) { state.searchQuery = q; render(); }
+        function setFiadoSearchQuery(q) { state.fiadoSearchQuery = q; render(); }
         function toggleMenu(id) { state.activeMenuId = state.activeMenuId === id ? null : id; render(); }
         function toggleFiadoMenu(id) { state.activeFiadoMenuId = state.activeFiadoMenuId === id ? null : id; render(); }
         function openModal() { state.isModalOpen = true; render(); }
         function closeModal() { state.isModalOpen = false; render(); }
+        function openExpenseModal() { state.isExpenseModalOpen = true; render(); }
+        function openProductModal() { state.isProductModalOpen = true; render(); }
 
         function createAppointment(e) {
             e.preventDefault();
@@ -627,15 +841,54 @@
             saveState();
         }
 
+        function createExpense(e) {
+            e.preventDefault();
+            let desc = document.getElementById('expenseDesc').value;
+            let amt = Number(document.getElementById('expenseAmt').value);
+            if (desc && amt > 0) {
+                state.expenseLogs.push({ id: Date.now().toString(), date: new Date().toISOString(), description: desc, amount: amt });
+                state.isExpenseModalOpen = false;
+                saveState();
+            }
+        }
+
+        function createProduct(e) {
+            e.preventDefault();
+            let name = document.getElementById('prodName').value;
+            let price = Number(document.getElementById('prodPrice').value);
+            let stock = Number(document.getElementById('prodStock').value);
+            if (name && price >= 0 && stock >= 0) {
+                state.products.push({ id: Date.now().toString(), name, price, stock });
+                state.isProductModalOpen = false;
+                saveState();
+            }
+        }
+
+        function sellProduct(id) {
+            let p = state.products.find(x => x.id === id);
+            if (p && p.stock > 0) {
+                p.stock--;
+                state.cashLogs.push({ id: Date.now().toString(), date: new Date().toISOString(), description: `Venta Producto: ${p.name}`, amount: p.price });
+                saveState();
+            } else {
+                alert('No hay stock disponible de este producto.');
+            }
+        }
+
+        function deleteProduct(id) {
+            state.products = state.products.filter(p => p.id !== id);
+            saveState();
+        }
+
         function sendWhatsApp(name, phone, service, time, date, price) {
             let cleanPhone = phone.replace(/\D/g, '');
-            let msg = `Hola ${name}. Turno en *${state.config.name}*.\nFecha: ${date}\nHora: ${time}\nServicio: ${service}\nTotal: ${formatARS(price)}`;
+            let msg = `Hola ${name}. Turno en ${state.config.name}. Fecha: ${date}. Hora: ${time}. Servicio: ${service}. Total: ${formatARS(price)}`;
             window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
         function sendFiadoWhatsApp(name, phone, total) {
             let cleanPhone = phone.replace(/\D/g, '');
-            let msg = `Hola ${name}. Te escribimos de *${state.config.name}* para recordarte tu saldo pendiente de *${formatARS(total)}*. Gracias.`;
+            let msg = `Hola ${name}. Te escribimos de ${state.config.name} para recordarte tu saldo pendiente de ${formatARS(total)}. Gracias.`;
             window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
@@ -687,6 +940,7 @@
             state.config.breakStart = document.getElementById('cfgBreakStart').value;
             state.config.breakEnd = document.getElementById('cfgBreakEnd').value;
             state.config.logoStyle = document.getElementById('cfgLogoStyle').value;
+            state.config.dailyGoal = Number(document.getElementById('cfgGoal').value) || 80000;
 
             let logoFile = document.getElementById('cfgLogoFile').files[0];
             if (logoFile) {
@@ -704,11 +958,43 @@
         }
 
         function clearCashHistory() {
-            if (confirm('¿Estás seguro de que deseas borrar todo el historial de ingresos de caja? Esta acción no se puede deshacer.')) {
+            if (confirm('¿Estás seguro de que deseas borrar todo el historial de ingresos y gastos de caja?')) {
                 state.cashLogs = [];
+                state.expenseLogs = [];
                 saveState();
                 alert('Historial de caja borrado correctamente.');
             }
+        }
+
+        function exportBackup() {
+            let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+            let downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `alexstyle_backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importBackup(e) {
+            let file = e.target.files[0];
+            if (!file) return;
+            let reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    let imported = JSON.parse(evt.target.result);
+                    if (imported.config && imported.services) {
+                        state = imported;
+                        saveState();
+                        alert('¡Copia de seguridad restaurada con éxito!');
+                    } else {
+                        alert('El archivo no es válido.');
+                    }
+                } catch(err) {
+                    alert('Error al leer el archivo JSON.');
+                }
+            };
+            reader.readAsText(file);
         }
 
         function addService() {
