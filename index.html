@@ -341,6 +341,12 @@
                 };
             }
 
+            // Guardar el scroll del contenido principal antes de reconstruirlo.
+            // Sin esto, en iPhone cada "Guardar Cambios" dentro de Ajustes
+            // (formulario largo) te devuelve de golpe al principio de la pantalla.
+            const prevMainEl = appEl.querySelector('main');
+            const prevScrollTop = prevMainEl ? prevMainEl.scrollTop : 0;
+
             appEl.innerHTML = `
                 <!-- Header cristal -->
                 <header class="bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-100 dark:border-zinc-900 px-5 py-4 flex items-center justify-between sticky top-0 z-30 transition-colors" style="padding-top: max(1rem, env(safe-area-inset-top));">
@@ -408,6 +414,13 @@
                 ${state.partialPaymentFiado ? renderPartialModal() : ''}
             `;
             lucide.createIcons();
+
+            // Restaurar el scroll donde estaba (misma pestaña) para no perder
+            // el lugar dentro de formularios largos como el de Ajustes.
+            const newMainEl = appEl.querySelector('main');
+            if (newMainEl && prevScrollTop > 0) {
+                newMainEl.scrollTop = prevScrollTop;
+            }
 
             // Restaurar el foco (y el cursor) en el input que se estaba usando,
             // para que el teclado del iPhone no se cierre al escribir cada letra.
@@ -718,105 +731,170 @@
             `;
         }
 
-        function renderAjustes() {
-            const currentStyle = state.config.logoStyle || 'circle';
+        // ==========================================================
+        // AJUSTES — helpers de UI reutilizables
+        // Se centraliza aquí el "look" de tarjetas, campos y switches
+        // para no repetir las mismas clases de Tailwind en cada sección
+        // y poder tocar el estilo de todos los ajustes en un solo lugar.
+        // ==========================================================
+
+        const SETTINGS_INPUT_BASE_CLASS = "px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700";
+        const SETTINGS_INPUT_CLASS = `w-full mt-1.5 ${SETTINGS_INPUT_BASE_CLASS}`;
+
+        function settingsCard(title, colorClass, iconName, innerHtml) {
             return `
-                <div class="space-y-5">
-                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-4">
-                        <h2 class="font-bold text-xs uppercase tracking-widest text-amber-600 dark:text-amber-500">Negocio y Horarios</h2>
-                        
-                        <div>
-                            <label class="text-[11px] font-medium text-gray-400">Logo de la App (Desde tu Galería)</label>
-                            <div class="flex items-center space-x-3.5 mt-2">
-                                ${renderLogoHTML()}
-                                <input type="file" id="cfgLogoFile" accept="image/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 dark:file:bg-zinc-800 dark:file:text-amber-400 cursor-pointer">
-                            </div>
-                        </div>
+                <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-4">
+                    <h2 class="flex items-center gap-1.5 font-bold text-xs uppercase tracking-widest ${colorClass}">
+                        <i data-lucide="${iconName}" class="w-3.5 h-3.5"></i>
+                        <span>${title}</span>
+                    </h2>
+                    ${innerHtml}
+                </div>
+            `;
+        }
 
-                        <div>
-                            <label class="text-[11px] font-medium text-gray-400">Formato / Forma del Logo</label>
-                            <select id="cfgLogoStyle" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
-                                <option value="circle" ${currentStyle === 'circle' ? 'selected' : ''}>Circular</option>
-                                <option value="square" ${currentStyle === 'square' ? 'selected' : ''}>Cuadrado</option>
-                                <option value="rectangle" ${currentStyle === 'rectangle' ? 'selected' : ''}>Rectangular / Horizontal (Sin recuadro ni bordes)</option>
-                            </select>
-                        </div>
+        function settingsField(label, id, value, type = 'text', extraClass = '') {
+            return `
+                <div>
+                    <label class="text-[11px] font-medium text-gray-400">${label}</label>
+                    <input type="${type}" id="${id}" value="${value ?? ''}" class="${SETTINGS_INPUT_CLASS} ${extraClass}">
+                </div>
+            `;
+        }
 
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="text-[11px] font-medium text-gray-400">Nombre Principal</label>
-                                <input type="text" id="cfgName" value="${state.config.name}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
-                            </div>
-                            <div>
-                                <label class="text-[11px] font-medium text-gray-400">Meta Diaria ($)</label>
-                                <input type="number" id="cfgGoal" value="${state.config.dailyGoal || 80000}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
-                            </div>
-                        </div>
+        // Switch tipo iOS para ajustes on/off (ej. Modo Oscuro)
+        function settingsToggle(checked, onclick) {
+            return `
+                <button type="button" onclick="${onclick}" aria-pressed="${checked}"
+                    class="relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-amber-600' : 'bg-gray-300 dark:bg-zinc-700'}">
+                    <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}"></span>
+                </button>
+            `;
+        }
 
-                        <div>
-                            <label class="text-[11px] font-medium text-gray-400">Subtítulo / Eslogan (Encabezado)</label>
-                            <input type="text" id="cfgSubtitle" value="${state.config.subtitle || 'Barber shop'}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
-                        </div>
+        // ---------- Secciones individuales de Ajustes ----------
 
-                        <div class="grid grid-cols-2 gap-3">
-                            <div><label class="text-[11px] font-medium text-gray-400">Apertura</label><input type="time" id="cfgStart" value="${state.config.startHour}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
-                            <div><label class="text-[11px] font-medium text-gray-400">Cierre</label><input type="time" id="cfgEnd" value="${state.config.endHour}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div><label class="text-[11px] font-medium text-gray-400">Minutos por Cliente</label><input type="number" id="cfgDuration" value="${state.config.slotDuration}" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
-                            <div>
-                                <label class="text-[11px] font-medium text-gray-400">Almuerzo Inicio/Fin</label>
-                                <div class="flex space-x-1.5 mt-1.5">
-                                    <input type="time" id="cfgBreakStart" value="${state.config.breakStart}" class="w-1/2 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
-                                    <input type="time" id="cfgBreakEnd" value="${state.config.breakEnd}" class="w-1/2 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
-                                </div>
-                            </div>
-                        </div>
-                        <button onclick="saveConfig()" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-amber-600/20 transition">Guardar Cambios</button>
+        function renderAjustesPerfil() {
+            const currentStyle = state.config.logoStyle || 'circle';
+            return settingsCard('Perfil del Negocio', 'text-amber-600 dark:text-amber-500', 'store', `
+                <div>
+                    <label class="text-[11px] font-medium text-gray-400">Logo de la App (Desde tu Galería)</label>
+                    <div class="flex items-center space-x-3.5 mt-2">
+                        ${renderLogoHTML()}
+                        <input type="file" id="cfgLogoFile" accept="image/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 dark:file:bg-zinc-800 dark:file:text-amber-400 cursor-pointer">
                     </div>
+                </div>
 
-                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3.5">
-                        <h2 class="font-bold text-xs uppercase tracking-widest text-amber-600 dark:text-amber-500">Servicios y Precios</h2>
-                        ${state.services.map(s => `
-                            <div class="flex justify-between items-center bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-xs border border-gray-100/50 dark:border-zinc-800/50">
-                                <span class="font-medium">${s.name} - <strong class="dark:text-emerald-400 font-bold">${formatARS(s.price)}</strong></span>
-                                <button onclick="deleteService('${s.id}')" class="text-red-500 p-1 hover:bg-red-50 dark:hover:bg-zinc-800 rounded-lg transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                            </div>
-                        `).join('')}
-                        <div class="space-y-2 pt-2">
-                            <input type="text" id="newSrvName" placeholder="Nombre del servicio..." class="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
-                            <div class="flex space-x-2">
-                                <input type="number" id="newSrvPrice" placeholder="Precio ($)" class="flex-1 min-w-0 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
-                                <button onclick="addService()" class="flex-shrink-0 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-2xl text-xs font-bold transition shadow-md shadow-amber-600/20 flex items-center justify-center space-x-1.5">
-                                    <i data-lucide="plus" class="w-4 h-4"></i><span>Agregar</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                <div>
+                    <label class="text-[11px] font-medium text-gray-400">Formato / Forma del Logo</label>
+                    <select id="cfgLogoStyle" class="${SETTINGS_INPUT_CLASS}">
+                        <option value="circle" ${currentStyle === 'circle' ? 'selected' : ''}>Circular</option>
+                        <option value="square" ${currentStyle === 'square' ? 'selected' : ''}>Cuadrado</option>
+                        <option value="rectangle" ${currentStyle === 'rectangle' ? 'selected' : ''}>Rectangular / Horizontal (Sin recuadro ni bordes)</option>
+                    </select>
+                </div>
 
-                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3.5">
-                        <h2 class="font-bold text-xs uppercase tracking-widest text-sky-500">Respaldo y Seguridad</h2>
-                        <p class="text-xs text-gray-400 leading-relaxed">Exporta una copia de seguridad de todos tus datos o restáurala en cualquier dispositivo.</p>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button onclick="exportBackup()" class="py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-2xl text-xs shadow-md shadow-sky-600/20 transition flex items-center justify-center space-x-1.5">
-                                <i data-lucide="download" class="w-4 h-4"></i><span>Exportar Backup</span>
-                            </button>
-                            <label class="py-2.5 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-bold rounded-2xl text-xs cursor-pointer transition flex items-center justify-center space-x-1.5">
-                                <i data-lucide="upload" class="w-4 h-4"></i><span>Restaurar</span>
-                                <input type="file" id="importFile" accept=".json" onchange="importBackup(event)" class="hidden">
-                            </label>
+                <div class="grid grid-cols-2 gap-3">
+                    ${settingsField('Nombre Principal', 'cfgName', state.config.name)}
+                    ${settingsField('Meta Diaria ($)', 'cfgGoal', state.config.dailyGoal || 80000, 'number')}
+                </div>
+
+                ${settingsField('Subtítulo / Eslogan (Encabezado)', 'cfgSubtitle', state.config.subtitle || 'Barber shop')}
+            `);
+        }
+
+        function renderAjustesHorarios() {
+            return settingsCard('Horarios y Turnos', 'text-amber-600 dark:text-amber-500', 'clock', `
+                <div class="grid grid-cols-2 gap-3">
+                    ${settingsField('Apertura', 'cfgStart', state.config.startHour, 'time')}
+                    ${settingsField('Cierre', 'cfgEnd', state.config.endHour, 'time')}
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    ${settingsField('Minutos por Cliente', 'cfgDuration', state.config.slotDuration, 'number')}
+                    <div>
+                        <label class="text-[11px] font-medium text-gray-400">Almuerzo Inicio/Fin</label>
+                        <div class="flex space-x-1.5 mt-1.5">
+                            <input type="time" id="cfgBreakStart" value="${state.config.breakStart}" class="w-1/2 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
+                            <input type="time" id="cfgBreakEnd" value="${state.config.breakEnd}" class="w-1/2 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
                         </div>
                     </div>
+                </div>
 
-                    <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3">
-                        <h2 class="font-bold text-xs uppercase tracking-widest text-red-500">Gestión de Historial</h2>
-                        <p class="text-xs text-gray-400 leading-relaxed">Puedes vaciar el historial de transacciones y registros de caja si deseas reiniciar las estadísticas.</p>
-                        <button onclick="clearCashHistory()" class="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-2 shadow-lg shadow-red-600/20 transition">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            <span>Borrar Historial de Caja y Gastos</span>
+                <button onclick="saveConfig()" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-amber-600/20 transition">Guardar Cambios</button>
+            `);
+        }
+
+        function renderAjustesApariencia() {
+            return settingsCard('Apariencia', 'text-violet-500', 'sparkles', `
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-semibold">Modo Oscuro</p>
+                        <p class="text-[11px] text-gray-400 mt-0.5 leading-relaxed">Ideal para usar de noche o con poca luz en el local.</p>
+                    </div>
+                    ${settingsToggle(!!state.config.darkMode, 'toggleDarkMode()')}
+                </div>
+            `);
+        }
+
+        function renderAjustesServicios() {
+            return settingsCard('Servicios y Precios', 'text-amber-600 dark:text-amber-500', 'scissors', `
+                <div class="space-y-3.5">
+                    ${state.services.map(s => `
+                        <div class="flex justify-between items-center bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-xs border border-gray-100/50 dark:border-zinc-800/50">
+                            <span class="font-medium">${s.name} - <strong class="dark:text-emerald-400 font-bold">${formatARS(s.price)}</strong></span>
+                            <button onclick="deleteService('${s.id}')" class="text-red-500 p-1 hover:bg-red-50 dark:hover:bg-zinc-800 rounded-lg transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="space-y-2 pt-2">
+                    <input type="text" id="newSrvName" placeholder="Nombre del servicio..." class="w-full ${SETTINGS_INPUT_BASE_CLASS}">
+                    <div class="flex space-x-2">
+                        <input type="number" id="newSrvPrice" placeholder="Precio ($)" class="flex-1 min-w-0 ${SETTINGS_INPUT_BASE_CLASS}">
+                        <button onclick="addService()" class="flex-shrink-0 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-2xl text-xs font-bold transition shadow-md shadow-amber-600/20 flex items-center justify-center space-x-1.5">
+                            <i data-lucide="plus" class="w-4 h-4"></i><span>Agregar</span>
                         </button>
                     </div>
+                </div>
+            `);
+        }
+
+        function renderAjustesBackup() {
+            return settingsCard('Respaldo y Seguridad', 'text-sky-500', 'shield-check', `
+                <p class="text-xs text-gray-400 leading-relaxed">Exporta una copia de seguridad de todos tus datos o restáurala en cualquier dispositivo.</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="exportBackup()" class="py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-2xl text-xs shadow-md shadow-sky-600/20 transition flex items-center justify-center space-x-1.5">
+                        <i data-lucide="download" class="w-4 h-4"></i><span>Exportar Backup</span>
+                    </button>
+                    <label class="py-2.5 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-bold rounded-2xl text-xs cursor-pointer transition flex items-center justify-center space-x-1.5">
+                        <i data-lucide="upload" class="w-4 h-4"></i><span>Restaurar</span>
+                        <input type="file" id="importFile" accept=".json" onchange="importBackup(event)" class="hidden">
+                    </label>
+                </div>
+            `);
+        }
+
+        function renderAjustesPeligro() {
+            return settingsCard('Zona de Peligro', 'text-red-500', 'triangle-alert', `
+                <p class="text-xs text-gray-400 leading-relaxed">Puedes vaciar el historial de transacciones y registros de caja si deseas reiniciar las estadísticas.</p>
+                <button onclick="clearCashHistory()" class="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-2 shadow-lg shadow-red-600/20 transition">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    <span>Borrar Historial de Caja y Gastos</span>
+                </button>
+            `);
+        }
+
+        // ---------- Ensamblado del panel de Ajustes ----------
+
+        function renderAjustes() {
+            return `
+                <div class="space-y-5">
+                    ${renderAjustesPerfil()}
+                    ${renderAjustesHorarios()}
+                    ${renderAjustesApariencia()}
+                    ${renderAjustesServicios()}
+                    ${renderAjustesBackup()}
+                    ${renderAjustesPeligro()}
                 </div>
             `;
         }
