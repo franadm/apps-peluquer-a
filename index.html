@@ -1288,24 +1288,37 @@
         }
 
         // ============================================================
-        // SISTEMA DE LICENCIA (protección anti-copia)
+        // SISTEMA DE LICENCIA (clave mensual rotativa, 100% offline)
         // ============================================================
-        // 1) Creá una Google Sheet con columnas: Clave | Cliente | Activo (SI/NO) | Vencimiento (AAAA-MM-DD, opcional) | MaxDispositivos (ej: 1) | Dispositivos
-        // 2) Extensiones > Apps Script, pegá el código que te pasé aparte, y "Implementar > Nueva implementación > Aplicación web"
-        //    (Ejecutar como: Yo | Quién tiene acceso: Cualquier usuario)
-        // 3) Copiá la URL que te da y pegala abajo en LICENSE_CONFIG.apiUrl
-        const LICENSE_CONFIG = {
-            apiUrl: 'https://script.google.com/macros/s/AKfycbwqblwzOH0OvA5Eeizz4RpjFzh62etNxwciFUtx4WL6sPvAy-VF5MPYIcuu0ZH-xn8tPw/exec',
-            graceHours: 72 // horas que sigue funcionando sin internet tras la última validación exitosa
-        };
+        // Cómo se usa:
+        // 1) Cada mes, agregá o actualizá una fila en la lista LICENSES de acá abajo,
+        //    una por cada peluquero al que le vendiste la app.
+        // 2) "vence" es el último día (incluido) en que esa clave funciona, formato 'AAAA-MM-DD'.
+        //    Después de esa fecha la app se bloquea sola, aunque no tenga internet.
+        // 3) Le mandás la clave nueva por WhatsApp a cada cliente que haya pagado ese mes.
+        //    Si no pagó, simplemente no le mandás clave nueva y la vieja vence sola.
+        // 4) Subí este archivo a GitHub Pages para que la próxima vez que el peluquero
+        //    abra la app CON internet, tenga la lista actualizada. Si abre sin internet,
+        //    va a seguir viendo la última versión que se cargó en su celular.
+        const LICENSES = [
+            // { key: 'CLAVE', cliente: 'Nombre para identificarlo', vence: 'AAAA-MM-DD' }
+            { key: 'AGOSTO2026-DEMO', cliente: 'Cliente de prueba', vence: '2026-08-31' },
+        ];
 
-        function getDeviceId() {
-            let id = localStorage.getItem('app_device_id');
-            if (!id) {
-                id = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
-                localStorage.setItem('app_device_id', id);
-            }
-            return id;
+        function normalizeKey(k) {
+            return String(k || '').trim().toUpperCase().replace(/\s+/g, '');
+        }
+
+        function findLicense(key) {
+            const k = normalizeKey(key);
+            return LICENSES.find(l => normalizeKey(l.key) === k);
+        }
+
+        function isLicenseValid(lic) {
+            if (!lic) return false;
+            if (!lic.vence) return true; // sin fecha de vencimiento = válida siempre
+            const vence = new Date(lic.vence + 'T23:59:59');
+            return new Date() <= vence;
         }
 
         function showLicenseGate(message = '', prefillKey = '') {
@@ -1321,9 +1334,9 @@
                     <div class="flex justify-center">${renderLogoHTML()}</div>
                     <div>
                         <h1 class="font-black text-lg tracking-tight">${(state.config && state.config.name) || 'Activación'}</h1>
-                        <p class="text-xs text-gray-400 mt-1">Ingresá tu clave de licencia para usar la app</p>
+                        <p class="text-xs text-gray-400 mt-1">Ingresá la clave del mes para usar la app</p>
                     </div>
-                    <input id="licenseKeyInput" type="text" value="${(prefillKey || '').replace(/"/g, '&quot;')}" placeholder="Clave de licencia"
+                    <input id="licenseKeyInput" type="text" value="${(prefillKey || '').replace(/"/g, '&quot;')}" placeholder="Clave del mes"
                         autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"
                         class="w-full text-center tracking-widest font-bold uppercase bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                     ${message ? `<p class="text-xs text-amber-600 dark:text-amber-500 font-semibold">${message}</p>` : ''}
@@ -1331,7 +1344,7 @@
                         class="w-full bg-gradient-to-br from-amber-500 to-barber-700 text-white font-bold text-sm py-3 rounded-2xl shadow-md shadow-amber-900/20 active:scale-95 transition">
                         Activar
                     </button>
-                    <p class="text-[10px] text-gray-400 leading-relaxed">Si no tenés una clave, contactá a quien te vendió la aplicación.</p>
+                    <p class="text-[10px] text-gray-400 leading-relaxed">Si no tenés la clave de este mes, pedísela a quien te vendió la aplicación.</p>
                 </div>
             `;
             if (window.lucide) lucide.createIcons();
@@ -1344,38 +1357,17 @@
                 showLicenseGate('Ingresá una clave válida.', '');
                 return;
             }
-            const btn = document.getElementById('licenseSubmitBtn');
-            if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
-            validateLicenseKey(key, true);
-        }
-
-        function validateLicenseKey(key, fromUserInput) {
-            const deviceId = getDeviceId();
-            fetch(`${LICENSE_CONFIG.apiUrl}?clave=${encodeURIComponent(key)}&device=${encodeURIComponent(deviceId)}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data && data.valid) {
-                        localStorage.setItem('app_license_key', key);
-                        localStorage.setItem('app_license_last_check', Date.now().toString());
-                        localStorage.setItem('app_license_client', data.cliente || '');
-                        bootAppAfterLicense();
-                    } else {
-                        localStorage.removeItem('app_license_last_check');
-                        showLicenseGate((data && data.motivo) || 'Clave inválida.', key);
-                    }
-                })
-                .catch(() => {
-                    const lastCheck = Number(localStorage.getItem('app_license_last_check') || 0);
-                    const savedKey = localStorage.getItem('app_license_key');
-                    const withinGrace = lastCheck && (Date.now() - lastCheck) < LICENSE_CONFIG.graceHours * 3600 * 1000;
-                    if (fromUserInput) {
-                        showLicenseGate('No se pudo conectar. Revisá tu internet.', key);
-                    } else if (savedKey === key && withinGrace) {
-                        bootAppAfterLicense();
-                    } else {
-                        showLicenseGate('No se pudo validar la licencia. Conectate a internet e intentá de nuevo.', key);
-                    }
-                });
+            const lic = findLicense(key);
+            if (!lic) {
+                showLicenseGate('Clave no encontrada. Pedísela a tu proveedor.', key);
+                return;
+            }
+            if (!isLicenseValid(lic)) {
+                showLicenseGate('Esta clave venció. Pedí la clave de este mes a tu proveedor.', key);
+                return;
+            }
+            localStorage.setItem('app_license_key', key);
+            bootAppAfterLicense();
         }
 
         function bootAppAfterLicense() {
@@ -1384,27 +1376,34 @@
             render();
             if (!window.__licenseInterval) {
                 window.__licenseInterval = setInterval(() => {
-                    const key = localStorage.getItem('app_license_key');
-                    if (key) validateLicenseKey(key, false);
-                }, 60 * 60 * 1000); // revalida cada 1 hora por si se desactiva o vence
+                    const savedKey = localStorage.getItem('app_license_key');
+                    if (savedKey) {
+                        const lic = findLicense(savedKey);
+                        if (!lic || !isLicenseValid(lic)) {
+                            localStorage.removeItem('app_license_key');
+                            showLicenseGate('Tu clave venció. Pedí la clave de este mes a tu proveedor.', savedKey);
+                        }
+                    }
+                }, 60 * 60 * 1000); // revisa el vencimiento cada 1 hora, sin necesitar internet
             }
         }
 
         function bootLicenseGate() {
-            if (!LICENSE_CONFIG.apiUrl || LICENSE_CONFIG.apiUrl.indexOf('PEGAR_URL') === 0) {
-                // Todavía no configuraste el backend de licencias: la app arranca libre (modo desarrollo)
-                render();
-                return;
-            }
             const savedKey = localStorage.getItem('app_license_key');
             if (savedKey) {
-                showLicenseGate('Verificando licencia...', savedKey);
-                const btn = document.getElementById('licenseSubmitBtn');
-                if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
-                validateLicenseKey(savedKey, false);
-            } else {
-                showLicenseGate();
+                const lic = findLicense(savedKey);
+                if (lic && isLicenseValid(lic)) {
+                    bootAppAfterLicense();
+                    return;
+                }
+                localStorage.removeItem('app_license_key');
+                showLicenseGate(
+                    lic ? 'Tu clave venció. Pedí la clave de este mes a tu proveedor.' : 'Tu clave ya no es válida. Pedí una clave nueva.',
+                    savedKey
+                );
+                return;
             }
+            showLicenseGate();
         }
 
         bootLicenseGate();
