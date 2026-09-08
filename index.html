@@ -327,7 +327,20 @@
             updateTheme();
             updateAppleMeta();
             const appEl = document.getElementById('app');
-            
+
+            // Guardar qué input/textarea tenía el foco (y la posición del cursor)
+            // antes de reconstruir el HTML, para no perder el teclado en iPhone.
+            const activeEl = document.activeElement;
+            let focusInfo = null;
+            if (activeEl && appEl.contains(activeEl) && activeEl.id &&
+                (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+                focusInfo = {
+                    id: activeEl.id,
+                    selectionStart: activeEl.selectionStart,
+                    selectionEnd: activeEl.selectionEnd
+                };
+            }
+
             appEl.innerHTML = `
                 <!-- Header cristal -->
                 <header class="bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-100 dark:border-zinc-900 px-5 py-4 flex items-center justify-between sticky top-0 z-30 transition-colors" style="padding-top: max(1rem, env(safe-area-inset-top));">
@@ -395,6 +408,21 @@
                 ${state.partialPaymentFiado ? renderPartialModal() : ''}
             `;
             lucide.createIcons();
+
+            // Restaurar el foco (y el cursor) en el input que se estaba usando,
+            // para que el teclado del iPhone no se cierre al escribir cada letra.
+            if (focusInfo) {
+                const newEl = document.getElementById(focusInfo.id);
+                if (newEl) {
+                    newEl.focus();
+                    if (typeof newEl.setSelectionRange === 'function' &&
+                        typeof focusInfo.selectionStart === 'number') {
+                        try {
+                            newEl.setSelectionRange(focusInfo.selectionStart, focusInfo.selectionEnd);
+                        } catch (err) { /* algunos tipos de input no soportan selección */ }
+                    }
+                }
+            }
         }
 
         function renderAppointmentCard(app) {
@@ -452,7 +480,7 @@
                         <!-- Buscador -->
                         <div class="flex-1 bg-white dark:bg-zinc-900/90 rounded-2xl border border-gray-100 dark:border-zinc-800/80 px-3.5 py-2.5 flex items-center space-x-2.5 shadow-sm">
                             <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
-                            <input type="text" value="${state.searchQuery}" oninput="setSearchQuery(this.value)" placeholder="Buscar cliente..." class="w-full bg-transparent text-xs outline-none">
+                            <input type="text" id="agendaSearchInput" value="${state.searchQuery}" oninput="setSearchQuery(this.value)" placeholder="Buscar cliente..." class="w-full bg-transparent text-xs outline-none">
                             ${state.searchQuery ? `<button onclick="setSearchQuery('')" class="text-gray-400 hover:text-gray-200"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>` : ''}
                         </div>
 
@@ -521,7 +549,7 @@
 
                     <div class="bg-white dark:bg-zinc-900/90 rounded-2xl border border-gray-100 dark:border-zinc-800/80 px-3.5 py-2.5 flex items-center space-x-2.5 shadow-sm">
                         <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
-                        <input type="text" value="${state.fiadoSearchQuery}" oninput="setFiadoSearchQuery(this.value)" placeholder="Buscar cliente en fiados..." class="w-full bg-transparent text-xs outline-none">
+                        <input type="text" id="fiadoSearchInput" value="${state.fiadoSearchQuery}" oninput="setFiadoSearchQuery(this.value)" placeholder="Buscar cliente en fiados..." class="w-full bg-transparent text-xs outline-none">
                         ${state.fiadoSearchQuery ? `<button onclick="setFiadoSearchQuery('')" class="text-gray-400 hover:text-gray-200"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>` : ''}
                     </div>
 
