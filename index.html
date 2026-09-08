@@ -72,6 +72,16 @@
 
         /* Feedback táctil consistente tipo iOS */
         button:active { opacity: 0.85; }
+
+        /* Evita que los inputs de hora (Apertura/Cierre) se desborden y se junten
+           dentro de una grilla en iPhone: los items de grid no encogen por defecto */
+        .grid > * { min-width: 0; }
+        input[type="time"] {
+            min-width: 0;
+            width: 100%;
+            box-sizing: border-box;
+            font-variant-numeric: tabular-nums;
+        }
     </style>
 </head>
 <body class="h-full bg-gray-100 dark:bg-black text-gray-900 dark:text-gray-100 font-sans antialiased flex justify-center">
@@ -805,18 +815,24 @@
 
         function renderAjustesHorarios() {
             return settingsCard('Horarios y Turnos', 'text-amber-600 dark:text-amber-500', 'clock', `
-                <div class="grid grid-cols-2 gap-3">
-                    ${settingsField('Apertura', 'cfgStart', state.config.startHour, 'time')}
-                    ${settingsField('Cierre', 'cfgEnd', state.config.endHour, 'time')}
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div class="min-w-0">
+                        <label class="text-[11px] font-medium text-gray-400">Apertura</label>
+                        <input type="time" id="cfgStart" value="${state.config.startHour}" class="w-full min-w-0 mt-1.5 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
+                    </div>
+                    <div class="min-w-0">
+                        <label class="text-[11px] font-medium text-gray-400">Cierre</label>
+                        <input type="time" id="cfgEnd" value="${state.config.endHour}" class="w-full min-w-0 mt-1.5 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
+                    </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-2 gap-2.5">
                     ${settingsField('Minutos por Cliente', 'cfgDuration', state.config.slotDuration, 'number')}
-                    <div>
+                    <div class="min-w-0">
                         <label class="text-[11px] font-medium text-gray-400">Almuerzo Inicio/Fin</label>
                         <div class="flex space-x-1.5 mt-1.5">
-                            <input type="time" id="cfgBreakStart" value="${state.config.breakStart}" class="w-1/2 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
-                            <input type="time" id="cfgBreakEnd" value="${state.config.breakEnd}" class="w-1/2 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
+                            <input type="time" id="cfgBreakStart" value="${state.config.breakStart}" class="w-1/2 min-w-0 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
+                            <input type="time" id="cfgBreakEnd" value="${state.config.breakEnd}" class="w-1/2 min-w-0 px-2 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-[11px] outline-none border border-gray-100 dark:border-zinc-700">
                         </div>
                     </div>
                 </div>
