@@ -266,13 +266,6 @@
                     ${state.activeTab === 'ajustes' ? renderAjustes() : ''}
                 </main>
 
-                <!-- Botón flotante según pestaña -->
-                ${state.activeTab === 'agenda' ? `
-                    <button onclick="openModal()" class="absolute bottom-20 right-5 w-14 h-14 bg-amber-600 hover:bg-amber-500 text-white rounded-2xl shadow-xl shadow-amber-600/40 flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 z-20">
-                        <i data-lucide="plus" class="w-6 h-6"></i>
-                    </button>
-                ` : ''}
-
                 <!-- Barra de Navegación Inferior de 5 Pestañas -->
                 <nav class="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-black/95 backdrop-blur-xl border-t border-gray-100 dark:border-zinc-900 py-3 px-4 flex justify-between items-center z-30 transition-colors">
                     <button onclick="setTab('agenda')" class="flex flex-col items-center space-y-1 transition ${state.activeTab === 'agenda' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
@@ -318,13 +311,23 @@
                 <div class="space-y-4">
                     ${renderWeekStrip()}
 
+                    <!-- Fila de Búsqueda, Botón Nuevo Turno y Contador -->
                     <div class="flex items-center space-x-2">
+                        <!-- Buscador -->
                         <div class="flex-1 bg-white dark:bg-zinc-900/90 rounded-2xl border border-gray-100 dark:border-zinc-800/80 px-3.5 py-2.5 flex items-center space-x-2.5 shadow-sm">
                             <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
-                            <input type="text" value="${state.searchQuery}" oninput="setSearchQuery(this.value)" placeholder="Buscar cliente o servicio..." class="w-full bg-transparent text-xs outline-none">
+                            <input type="text" value="${state.searchQuery}" oninput="setSearchQuery(this.value)" placeholder="Buscar cliente..." class="w-full bg-transparent text-xs outline-none">
                             ${state.searchQuery ? `<button onclick="setSearchQuery('')" class="text-gray-400 hover:text-gray-200"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>` : ''}
                         </div>
-                        <span class="px-3.5 py-3 bg-amber-50 dark:bg-zinc-900/90 border border-amber-200/50 dark:border-zinc-800 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-2xl shadow-sm whitespace-nowrap">
+
+                        <!-- Botón Nuevo Turno (en el medio) -->
+                        <button onclick="openModal()" class="px-3.5 py-3 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-2xl shadow-md shadow-amber-600/30 flex items-center space-x-1.5 whitespace-nowrap transition active:scale-95">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            <span>Nuevo</span>
+                        </button>
+
+                        <!-- Contador de Turnos -->
+                        <span class="px-3 py-3 bg-amber-50 dark:bg-zinc-900/90 border border-amber-200/50 dark:border-zinc-800 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-2xl shadow-sm whitespace-nowrap">
                             ${dayApps.length} turnos
                         </span>
                     </div>
@@ -463,7 +466,6 @@
 
             return `
                 <div class="space-y-4">
-                    <!-- Control de Caja, Meta y Gastos -->
                     <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-4">
                         <div class="flex justify-between items-center">
                             <h2 class="font-bold text-sm tracking-tight flex items-center"><i data-lucide="wallet" class="w-4 h-4 mr-2 text-amber-600 dark:text-amber-500"></i> Balance Financiero</h2>
@@ -472,7 +474,6 @@
                             </button>
                         </div>
 
-                        <!-- Barra de Meta Diaria con Alerta de Éxito -->
                         <div class="p-3.5 rounded-2xl ${goalReached ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-gray-50 dark:bg-zinc-800/50'} space-y-2">
                             <div class="flex justify-between items-center text-xs">
                                 <span class="font-bold ${goalReached ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}">Meta Diaria (${percent}%)</span>
@@ -483,7 +484,6 @@
                             </div>
                         </div>
 
-                        <!-- Resumen Ingresos, Gastos y Neto -->
                         <div class="grid grid-cols-3 gap-2.5 pt-1">
                             <div class="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl text-center border border-gray-100/50 dark:border-zinc-800/50">
                                 <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Ingresos (Día)</p>
@@ -500,7 +500,6 @@
                         </div>
                     </div>
 
-                    <!-- Pestaña de Movimientos (Ingresos y Gastos) -->
                     <div class="space-y-3">
                         <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">Últimos Movimientos</h2>
                         ${state.cashLogs.length === 0 && state.expenseLogs.length === 0 ? `<div class="text-center py-10 text-xs text-gray-400 bg-white dark:bg-zinc-900/50 rounded-3xl border border-gray-100 dark:border-zinc-800">No hay transacciones aún.</div>` : ''}
@@ -635,7 +634,6 @@
                         </div>
                     </div>
 
-                    <!-- Respaldo y Restauración de Datos -->
                     <div class="bg-white dark:bg-zinc-900/90 p-5 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3.5">
                         <h2 class="font-bold text-xs uppercase tracking-widest text-sky-500">Respaldo y Seguridad</h2>
                         <p class="text-xs text-gray-400 leading-relaxed">Exporta una copia de seguridad de todos tus datos o restáurala en cualquier dispositivo.</p>
