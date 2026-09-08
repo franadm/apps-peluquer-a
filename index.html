@@ -1295,7 +1295,7 @@
         //    (Ejecutar como: Yo | Quién tiene acceso: Cualquier usuario)
         // 3) Copiá la URL que te da y pegala abajo en LICENSE_CONFIG.apiUrl
         const LICENSE_CONFIG = {
-            apiUrl: 'https://script.google.com/macros/s/AKfycbz95ON32Oj9xMvF3i6QAPI2VJzCqezunQVux_UfBxSBGmCDrZWkgmgIwjt6Bx1gdfd-hA/exec',
+            apiUrl: 'https://script.google.com/macros/s/AKfycbwqblwzOH0OvA5Eeizz4RpjFzh62etNxwciFUtx4WL6sPvAy-VF5MPYIcuu0ZH-xn8tPw/exec',
             graceHours: 72 // horas que sigue funcionando sin internet tras la última validación exitosa
         };
 
@@ -1324,6 +1324,7 @@
                         <p class="text-xs text-gray-400 mt-1">Ingresá tu clave de licencia para usar la app</p>
                     </div>
                     <input id="licenseKeyInput" type="text" value="${(prefillKey || '').replace(/"/g, '&quot;')}" placeholder="Clave de licencia"
+                        autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"
                         class="w-full text-center tracking-widest font-bold uppercase bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                     ${message ? `<p class="text-xs text-amber-600 dark:text-amber-500 font-semibold">${message}</p>` : ''}
                     <button onclick="submitLicenseKey()" id="licenseSubmitBtn"
