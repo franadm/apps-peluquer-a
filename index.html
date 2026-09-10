@@ -136,6 +136,8 @@
             fiados: JSON.parse(localStorage.getItem('alexstyle_fiados')) || [],
             cashLogs: JSON.parse(localStorage.getItem('alexstyle_cash')) || [],
             expenseLogs: JSON.parse(localStorage.getItem('alexstyle_expenses')) || [],
+            loyaltyRedemptions: JSON.parse(localStorage.getItem('alexstyle_loyalty_redemptions')) || [],
+            referralRedemptions: JSON.parse(localStorage.getItem('alexstyle_referral_redemptions')) || [],
             activeTab: 'agenda',
             selectedDate: new Date().toISOString().split('T')[0],
             searchQuery: '',
@@ -169,6 +171,8 @@
 
         if (!state.config.logoStyle) state.config.logoStyle = 'circle';
         if (!state.config.dailyGoal) state.config.dailyGoal = 80000;
+        if (!state.config.loyaltyGoal) state.config.loyaltyGoal = 8;
+        if (!state.config.referralGoal) state.config.referralGoal = 3;
 
         function saveState() {
             localStorage.setItem('alexstyle_config', JSON.stringify(state.config));
@@ -178,6 +182,8 @@
             localStorage.setItem('alexstyle_fiados', JSON.stringify(state.fiados));
             localStorage.setItem('alexstyle_cash', JSON.stringify(state.cashLogs));
             localStorage.setItem('alexstyle_expenses', JSON.stringify(state.expenseLogs));
+            localStorage.setItem('alexstyle_loyalty_redemptions', JSON.stringify(state.loyaltyRedemptions));
+            localStorage.setItem('alexstyle_referral_redemptions', JSON.stringify(state.referralRedemptions));
             render();
         }
 
@@ -391,6 +397,7 @@
                     ${state.activeTab === 'fiados' ? renderFiados() : ''}
                     ${state.activeTab === 'caja' ? renderCaja() : ''}
                     ${state.activeTab === 'stock' ? renderStock() : ''}
+                    ${state.activeTab === 'clientes' ? renderClientes() : ''}
                     ${state.activeTab === 'ajustes' ? renderAjustes() : ''}
                 </main>
 
@@ -412,6 +419,10 @@
                     <button onclick="setTab('stock')" class="flex flex-col items-center space-y-1 transition ${state.activeTab === 'stock' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
                         <i data-lucide="package" class="w-5 h-5"></i>
                         <span class="text-[9px] tracking-wide">Stock</span>
+                    </button>
+                    <button onclick="setTab('clientes')" class="flex flex-col items-center space-y-1 transition ${state.activeTab === 'clientes' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
+                        <i data-lucide="award" class="w-5 h-5"></i>
+                        <span class="text-[9px] tracking-wide">Clientes</span>
                     </button>
                     <button onclick="setTab('ajustes')" class="flex flex-col items-center space-y-1 transition ${state.activeTab === 'ajustes' ? 'text-amber-600 dark:text-amber-500 font-bold scale-105' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}">
                         <i data-lucide="settings" class="w-5 h-5"></i>
@@ -922,6 +933,16 @@
             `);
         }
 
+        function renderAjustesFidelidad() {
+            return settingsCard('Fidelidad y Referidos', 'text-amber-600 dark:text-amber-500', 'award', `
+                <p class="text-xs text-gray-400 leading-relaxed">Definí cada cuántos cortes o referidos se gana un premio. Se calcula automáticamente con los turnos completados.</p>
+                <div class="grid grid-cols-2 gap-3">
+                    ${settingsField('Cortes para premio', 'cfgLoyaltyGoal', state.config.loyaltyGoal || 8, 'number')}
+                    ${settingsField('Referidos para premio', 'cfgReferralGoal', state.config.referralGoal || 3, 'number')}
+                </div>
+            `);
+        }
+
         // ---------- Ensamblado del panel de Ajustes ----------
 
         function renderAjustes() {
@@ -931,6 +952,7 @@
                     ${renderAjustesHorarios()}
                     ${renderAjustesApariencia()}
                     ${renderAjustesServicios()}
+                    ${renderAjustesFidelidad()}
                     ${renderAjustesBackup()}
                     ${renderAjustesPeligro()}
                 </div>
@@ -949,6 +971,7 @@
                         <form onsubmit="createAppointment(event)" class="space-y-3.5">
                             <div><label class="text-[11px] font-medium text-gray-400">Cliente</label><input type="text" id="modalClient" required placeholder="Nombre..." class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
                             <div><label class="text-[11px] font-medium text-gray-400">Teléfono</label><input type="text" id="modalPhone" placeholder="Ej. 3858123456" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
+                            <div><label class="text-[11px] font-medium text-gray-400">Referido por (opcional)</label><input type="text" id="modalReferidoPor" placeholder="Nombre de quien lo trajo..." class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700"></div>
                             <div>
                                 <label class="text-[11px] font-medium text-gray-400">Servicio</label>
                                 <select id="modalService" class="w-full mt-1.5 px-3.5 py-2.5 bg-gray-50 dark:bg-zinc-800 rounded-2xl text-xs outline-none border border-gray-100 dark:border-zinc-700">
@@ -1037,6 +1060,127 @@
         }
 
         function setTab(tab) { state.activeTab = tab; state.activeMenuId = null; state.activeFiadoMenuId = null; render(); }
+
+        // ============================================================
+        // FIDELIDAD Y REFERIDOS
+        // ============================================================
+        function normalizeClientKey(name, phone) {
+            return (name || '').trim().toLowerCase() + '|' + (phone || '').replace(/\D/g, '');
+        }
+
+        function getClientsSummary() {
+            const map = {};
+            state.appointments.filter(a => a.status === 'completed').forEach(a => {
+                const key = normalizeClientKey(a.clientName, a.phone);
+                if (!map[key]) {
+                    map[key] = { key, name: a.clientName, phone: a.phone, visits: 0, lastVisit: a.date, referidoPor: null };
+                }
+                map[key].visits++;
+                if (new Date(a.date) > new Date(map[key].lastVisit)) map[key].lastVisit = a.date;
+                if (a.referidoPor && !map[key].referidoPor) map[key].referidoPor = a.referidoPor;
+            });
+            return Object.values(map);
+        }
+
+        function getLoyaltyProgress(client) {
+            const goal = state.config.loyaltyGoal || 8;
+            const redemptions = state.loyaltyRedemptions.filter(r => r.clientKey === client.key).length;
+            const progress = client.visits - (redemptions * goal);
+            const remainder = progress % goal;
+            const readyToRedeem = progress > 0 && remainder === 0;
+            return { goal, current: readyToRedeem ? goal : Math.max(0, remainder), readyToRedeem };
+        }
+
+        function redeemLoyalty(clientKey) {
+            state.loyaltyRedemptions.push({ clientKey, date: new Date().toISOString() });
+            saveState();
+        }
+
+        function getReferralCount(name) {
+            const clients = getClientsSummary();
+            const referred = new Set();
+            clients.forEach(c => {
+                if (c.referidoPor && c.referidoPor.trim().toLowerCase() === (name || '').trim().toLowerCase()) {
+                    referred.add(c.key);
+                }
+            });
+            return referred.size;
+        }
+
+        function getReferralProgress(client) {
+            const goal = state.config.referralGoal || 3;
+            const totalReferred = getReferralCount(client.name);
+            const redemptions = state.referralRedemptions.filter(r => r.clientKey === client.key).length;
+            const progress = totalReferred - (redemptions * goal);
+            const remainder = progress % goal;
+            const readyToRedeem = progress > 0 && remainder === 0;
+            return { goal, current: readyToRedeem ? goal : Math.max(0, remainder), readyToRedeem, totalReferred };
+        }
+
+        function redeemReferral(clientKey) {
+            state.referralRedemptions.push({ clientKey, date: new Date().toISOString() });
+            saveState();
+        }
+
+        function renderClientes() {
+            const clients = getClientsSummary().sort((a, b) => b.visits - a.visits);
+            const loyaltyGoal = state.config.loyaltyGoal || 8;
+            const referralGoal = state.config.referralGoal || 3;
+            return `
+                <div class="space-y-4 pb-4">
+                    <div class="bg-gradient-to-br from-amber-500 to-barber-700 rounded-3xl p-5 text-white shadow-lg shadow-amber-900/20">
+                        <p class="text-[10px] uppercase tracking-widest text-amber-100 font-bold">Programa de Fidelidad y Referidos</p>
+                        <p class="text-xs text-amber-50 mt-1.5 leading-relaxed">Cada ${loyaltyGoal} cortes, 1 gratis · Cada ${referralGoal} amigos referidos, 1 premio</p>
+                    </div>
+                    <div class="space-y-3">
+                        ${clients.length === 0 ? `
+                            <div class="text-center py-10 opacity-50">
+                                <i data-lucide="award" class="w-10 h-10 mx-auto mb-2"></i>
+                                <p class="text-xs font-medium text-gray-400">Todavía no hay clientes con turnos completados.</p>
+                            </div>
+                        ` : clients.map(c => {
+                            const loyalty = getLoyaltyProgress(c);
+                            const referral = getReferralProgress(c);
+                            return `
+                            <div class="bg-white dark:bg-zinc-900/90 p-4 rounded-3xl border border-gray-100 dark:border-zinc-800/80 shadow-sm space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-bold text-sm">${c.name}</p>
+                                        <p class="text-[10px] text-gray-400">${c.visits} cortes totales${c.phone ? ' · ' + c.phone : ''}</p>
+                                    </div>
+                                    ${c.phone ? `<a href="https://wa.me/${c.phone.replace(/\D/g, '')}" target="_blank" class="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"><i data-lucide="message-circle" class="w-4 h-4"></i></a>` : ''}
+                                </div>
+
+                                <div>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1"><i data-lucide="star" class="w-3 h-3"></i> Fidelidad</p>
+                                        <p class="text-[10px] font-bold ${loyalty.readyToRedeem ? 'text-emerald-500' : 'text-gray-400'}">${loyalty.current}/${loyalty.goal}</p>
+                                    </div>
+                                    <div class="w-full h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                        <div class="h-full bg-amber-500 rounded-full transition-all" style="width:${Math.min(100, (loyalty.current / loyalty.goal) * 100)}%"></div>
+                                    </div>
+                                    ${loyalty.readyToRedeem ? `<button onclick="redeemLoyalty('${c.key}')" class="mt-2 w-full py-2 bg-amber-500 text-white text-[11px] font-bold rounded-xl active:scale-95 transition">🎁 Canjear corte gratis</button>` : ''}
+                                </div>
+
+                                ${referral.totalReferred > 0 ? `
+                                <div>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1"><i data-lucide="user-plus" class="w-3 h-3"></i> Referidos</p>
+                                        <p class="text-[10px] font-bold ${referral.readyToRedeem ? 'text-emerald-500' : 'text-gray-400'}">${referral.current}/${referral.goal}</p>
+                                    </div>
+                                    <div class="w-full h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                        <div class="h-full bg-sky-500 rounded-full transition-all" style="width:${Math.min(100, (referral.current / referral.goal) * 100)}%"></div>
+                                    </div>
+                                    ${referral.readyToRedeem ? `<button onclick="redeemReferral('${c.key}')" class="mt-2 w-full py-2 bg-sky-500 text-white text-[11px] font-bold rounded-xl active:scale-95 transition">🎁 Canjear premio por referidos</button>` : ''}
+                                </div>
+                                ` : ''}
+                            </div>
+                        `; }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
         function toggleDarkMode() { state.config.darkMode = !state.config.darkMode; saveState(); }
         function changeDate(d) { state.selectedDate = d; state.showCompletedAppointments = false; render(); }
         function toggleCompletedAppointments() { state.showCompletedAppointments = !state.showCompletedAppointments; render(); }
@@ -1053,6 +1197,7 @@
             e.preventDefault();
             let name = document.getElementById('modalClient').value;
             let phone = document.getElementById('modalPhone').value || state.config.phone;
+            let referidoPor = document.getElementById('modalReferidoPor').value.trim();
             let srvId = document.getElementById('modalService').value;
             let time = document.getElementById('modalTime').value;
             let srv = state.services.find(s => s.id === srvId);
@@ -1061,6 +1206,7 @@
                 id: Date.now().toString(),
                 clientName: name,
                 phone: phone,
+                referidoPor: referidoPor || null,
                 date: state.selectedDate,
                 time: time,
                 serviceName: srv.name,
@@ -1217,6 +1363,8 @@
             state.config.breakEnd = document.getElementById('cfgBreakEnd').value;
             state.config.logoStyle = document.getElementById('cfgLogoStyle').value;
             state.config.dailyGoal = Number(document.getElementById('cfgGoal').value) || 80000;
+            state.config.loyaltyGoal = Number(document.getElementById('cfgLoyaltyGoal').value) || 8;
+            state.config.referralGoal = Number(document.getElementById('cfgReferralGoal').value) || 3;
 
             let logoFile = document.getElementById('cfgLogoFile').files[0];
             if (logoFile) {
@@ -1304,9 +1452,7 @@
 
         const LICENSES = [
             // { key: 'CLAVE', cliente: 'Nombre para identificarlo', vence: 'AAAA-MM-DD' }
-            { key: 'AGOSTO2026-DEMO', cliente: 'Cliente de prueba', vence: '2026-09-09' },
-            { key: 'AGOSTO2026-JUAN', cliente: 'Juan Peluquería', vence: '2026-09-30' },
-            { key: 'AGOSTO2026-PEDRO', cliente: 'Pedro Barber', vence: '2026-09-10' },
+            { key: 'AGOSTO2026-DEMO', cliente: 'Cliente de prueba', vence: '2026-09-30' },
         ];
 
         function normalizeKey(k) {
